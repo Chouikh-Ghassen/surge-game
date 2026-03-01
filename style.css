@@ -503,6 +503,12 @@ html, body {
   font-weight: bold;
 }
 
+.daily-reward {
+  font-size: 9px;
+  color: #ccaa44;
+  margin-top: 2px;
+}
+
 .daily-desc {
   font-size: 9px;
   color: #888;
@@ -620,4 +626,32 @@ html, body {
   padding: 20px;
   font-style: italic;
   font-size: 11px;
+}
+
+/* Pause screen toggle */
+.pause-toggle {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
+.pause-toggle input { accent-color: #aaff44; }
+
+/* Model picker inline layout */
+.model-picker {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.model-picker select {
+  flex: 1;
+  min-width: 0;
+}
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 10px;
+  min-width: 0;
 }

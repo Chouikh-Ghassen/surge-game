@@ -154,6 +154,50 @@ export class LLMAdapter {
   }
 
   /**
+   * Fetch available models from the API.
+   * Supports: OpenAI-compatible (/v1/models), Ollama (/api/tags).
+   * @returns {Promise<Array<{id: string, name: string}>>} List of available models
+   */
+  async fetchModels() {
+    if (!this.endpoint) return [];
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const headers = this._getHeaders();
+
+    try {
+      // Try Ollama endpoint first if local
+      if (this._isOllama()) {
+        const url = `${this.endpoint.replace(/\/+$/, '')}/api/tags`;
+        const res = await fetch(url, { headers, signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          return (data.models || []).map(m => ({ id: m.name || m.model, name: m.name || m.model }));
+        }
+      }
+
+      // OpenAI-compatible /v1/models (works for OpenAI, Mistral, Groq, Together, LM Studio, vLLM)
+      const base = this.endpoint.replace(/\/+$/, '');
+      const modelsUrl = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
+      const res = await fetch(modelsUrl, { headers, signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) return [];
+      const data = await res.json();
+      const models = data.data || data.models || [];
+      return models.map(m => ({
+        id: m.id || m.name || m.model,
+        name: m.id || m.name || m.model,
+      })).sort((a, b) => a.name.localeCompare(b.name));
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.warn('[LLM] fetchModels failed:', err.message);
+      return [];
+    }
+  }
+
+  /**
    * Get adapter stats.
    * @returns {{totalCalls: number, totalTokens: number, avgLatency: number, failures: number}}
    */

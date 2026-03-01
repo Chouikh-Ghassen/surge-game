@@ -31,6 +31,8 @@ const hud = {
   enemyCount: 0,
   /** Level number */
   level: 1,
+  /** LLM overlay data */
+  llmOverlay: { visible: true, mode: '', cards: [], rationale: '', tip: '' },
 };
 
 // ─── Public API ──────────────────────────────────────────────
@@ -147,6 +149,7 @@ export function resetHud() {
   hud.dashReady = 1;
   hud.enemyCount = 0;
   hud.level = 1;
+  hud.llmOverlay = { visible: hud.llmOverlay.visible, mode: '', cards: [], rationale: '', tip: '' };
 }
 
 /**
@@ -179,6 +182,33 @@ export function setHudEnemyCount(count) {
  */
 export function setHudLevel(lv) {
   hud.level = lv;
+}
+
+/**
+ * Update LLM overlay data (call each frame or on director change).
+ * @param {{ mode: string, cards: string[], rationale: string, tip: string }} data
+ */
+export function setLlmOverlay(data) {
+  hud.llmOverlay.mode = data.mode || '';
+  hud.llmOverlay.cards = data.cards || [];
+  hud.llmOverlay.rationale = data.rationale || '';
+  hud.llmOverlay.tip = data.tip || '';
+}
+
+/**
+ * Toggle LLM overlay visibility.
+ * @param {boolean} visible
+ */
+export function setLlmOverlayVisible(visible) {
+  hud.llmOverlay.visible = visible;
+}
+
+/**
+ * Get LLM overlay visibility state.
+ * @returns {boolean}
+ */
+export function isLlmOverlayVisible() {
+  return hud.llmOverlay.visible;
 }
 
 // ─── Render ──────────────────────────────────────────────────
@@ -266,6 +296,11 @@ export function renderHud(ctx) {
     ctx.fillText(entry.text, W - 4, 24 + i * 7);
   }
   ctx.globalAlpha = 1;
+
+  // ── LLM Director Overlay (bottom-right, above XP bar) ──
+  if (hud.llmOverlay.visible && hud.llmOverlay.mode) {
+    _drawLlmOverlay(ctx, W, H);
+  }
 
   // Reset text alignment
   ctx.textAlign = 'left';
@@ -445,6 +480,77 @@ function _drawUpgradeIcons(ctx, x, y) {
 
     ox += 9;
     if (ox > SCREEN.WIDTH - 30) break; // Don't overflow
+  }
+
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
+/**
+ * Draw the LLM Director overlay — compact info panel bottom-right.
+ * Shows: mode badge, current cards, rationale (truncated).
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} W
+ * @param {number} H
+ */
+function _drawLlmOverlay(ctx, W, H) {
+  const ov = hud.llmOverlay;
+  const pad = 3;
+  const lineH = 7;
+  const maxW = 100;
+  const x = W - maxW - 2;
+  const baseY = H - 50; // Above XP bar and upgrade icons
+
+  // Build text lines
+  const lines = [];
+  const modeLabel = ov.mode === 'llm' ? 'LLM' : ov.mode === 'adaptive' ? 'ADPT' : 'CLSC';
+  lines.push({ text: `⚡ ${modeLabel}`, color: 12 }); // cyan
+
+  if (ov.cards.length > 0) {
+    // Show card picks abbreviated (max 3, truncated names)
+    const cardStr = ov.cards.slice(0, 3).map(c => {
+      // Shorten card IDs: 'drifter_pack' → 'drifter'
+      const short = c.split('_')[0];
+      return short.length > 7 ? short.slice(0, 6) + '…' : short;
+    }).join(', ');
+    lines.push({ text: `» ${cardStr}`, color: 9 }); // yellow
+  }
+
+  if (ov.rationale) {
+    // Strip [LLM] prefix and truncate
+    let r = ov.rationale.replace(/^\[LLM[^\]]*\]\s*/i, '');
+    if (r.length > 28) r = r.slice(0, 26) + '…';
+    lines.push({ text: r, color: 15 }); // white
+  }
+
+  if (ov.tip) {
+    let t = ov.tip;
+    if (t.length > 28) t = t.slice(0, 26) + '…';
+    lines.push({ text: `💡 ${t}`, color: 10 }); // green
+  }
+
+  if (lines.length <= 1) return; // Nothing interesting to show
+
+  const boxH = lines.length * lineH + pad * 2;
+  const boxY = baseY - boxH;
+
+  // Semi-transparent background
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = getColor(0);
+  ctx.fillRect(x, boxY, maxW + pad, boxH);
+  ctx.globalAlpha = 0.2;
+  ctx.strokeStyle = getColor(3);
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(x, boxY, maxW + pad, boxH);
+
+  // Draw text lines
+  ctx.globalAlpha = 0.7;
+  ctx.font = '4px monospace';
+  ctx.textAlign = 'left';
+
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillStyle = getColor(lines[i].color);
+    ctx.fillText(lines[i].text, x + pad, boxY + pad + (i + 1) * lineH - 2);
   }
 
   ctx.globalAlpha = 1;

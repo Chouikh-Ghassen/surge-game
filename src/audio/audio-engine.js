@@ -186,35 +186,15 @@ export function sfxClick() {
   playTone(1000, 0.03, 'square', 0.1);
 }
 
-// ─── Simple Music Loop (procedural ambient drone) ────────────
+// ─── Music (disabled — the procedural drone sounded like a motor) ─────
 
 let musicOsc1 = null;
 let musicOsc2 = null;
 let musicPlaying = false;
 
 export function startMusic() {
-  if (!ctx || !initialized || musicPlaying) return;
-  resumeAudio();
-
-  musicOsc1 = ctx.createOscillator();
-  musicOsc1.type = 'sine';
-  musicOsc1.frequency.setValueAtTime(55, ctx.currentTime);  // Low A drone
-  const g1 = ctx.createGain();
-  g1.gain.setValueAtTime(0.08, ctx.currentTime);
-  musicOsc1.connect(g1);
-  g1.connect(musicGain);
-  musicOsc1.start();
-
-  musicOsc2 = ctx.createOscillator();
-  musicOsc2.type = 'triangle';
-  musicOsc2.frequency.setValueAtTime(82.4, ctx.currentTime); // Low E
-  const g2 = ctx.createGain();
-  g2.gain.setValueAtTime(0.04, ctx.currentTime);
-  musicOsc2.connect(g2);
-  g2.connect(musicGain);
-  musicOsc2.start();
-
-  musicPlaying = true;
+  // Intentionally empty — the ambient drone was more annoying than atmospheric.
+  // TODO: replace with a proper procedural soundtrack or looped audio file.
 }
 
 export function stopMusic() {

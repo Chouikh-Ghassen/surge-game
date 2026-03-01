@@ -1,24 +1,23 @@
 # ⚡ SURGE
 
-**A bullet-heaven where the AI learns how you play — and fights back.**
+**A bullet-heaven where the AI learns how you playn, and fights back.**
 
-Built from scratch. No engine, no framework, no dependencies. Just vanilla JavaScript, a Canvas, and a bad attitude.
-
+![Alt text](icons/SURGE_AI_HACKATHON.png)
 ---
 
 ## The Story
 
-We fell in love with **Swarm** — the bullet-heaven mode Riot dropped into League of Legends in summer 2024. Four friends, one screen, dodging thousands of enemies while the game kept scaling against us. It was the most fun we'd had in years.
+We fell in love with **Swarm**: the bullet-heaven mode Riot dropped into League of Legends in summer 2024. Four friends, one screen, dodging thousands of enemies while the game kept scaling against us. It was the most fun we'd had in years.
 
 Then Riot rotated it out. Gone. No standalone release, no comeback date, just a hole in our game nights.
 
 So we said: *"Fine. We'll build our own."*
 
-We started sketching on a napkin. What if the game didn't just throw harder waves at you — what if it actually **watched** you play? What if it knew you always dodge left, knew when you were panicking, knew when you were bored? What if you could plug in an LLM and the game would literally *think* about how to challenge you?
+We started sketching on a napkin. What if the game didn't just throw harder waves at you, what if it actually **watched** you play? What if it knew you always dodge left, knew when you were panicking, knew when you were bored? What if you could plug in an LLM and the game would literally *think* about how to challenge you?
 
-SURGE is what came out. Two people, zero dependencies, a phone screen, and an AI that learns your habits in real time. We didn't just recreate Swarm — we gave it a brain.
+SURGE is what came out. Two people, zero dependencies, a phone screen, and an AI that learns your habits in real time. We didn't just recreate Swarm, we gave it a brain.
 
-And we're not done. The goal is to ship this as a real mobile game.
+And we're not done. The goal is to ship this as a real mobile game, and ofc, to win the Mistral AI Worldwide Hackathon.
 
 ---
 
@@ -26,7 +25,7 @@ And we're not done. The goal is to ship this as a real mobile game.
 
 SURGE is a mobile-first, portrait-mode bullet-heaven survival game. You auto-fire. Enemies come at you in waves. You dodge, dash, level up, and try to survive 30 waves of increasingly creative mayhem.
 
-The twist? **An AI Director watches everything you do** — your stress level, your dodge patterns, your build choices — and dynamically adjusts what it throws at you next. Too comfortable? Here come the Dashers. Tilting? It eases off. Plug in an LLM (Mistral, OpenAI, a local Ollama model — anything), and the Director starts crafting encounters with narrative flavor text and strategic reasoning.
+The twist? **An AI Director watches everything you do**: your stress level, your dodge patterns, your build choices, and dynamically adjusts what it throws at you next. Too comfortable? Here come the Dashers. Tilting? It eases off. Plug in an LLM (Mistral, OpenAI, a local Ollama model, anything), and the Director starts crafting encounters with narrative flavor text and strategic reasoning.
 
 Think Vampire Survivors meets Left 4 Dead's AI Director, shrunk down to a phone screen.
 
@@ -65,9 +64,9 @@ Portrait mode. 240×400 logical pixels. Scales to any screen.
 
 **Zero dependencies.** No React. No Phaser. No Pixi. The import tree is pure ES modules served as-is.
 
-The whole thing runs on a custom **Entity Component System** — entities are integers, components are Maps, queries use archetype caching. Below that sits a **fixed-timestep game loop** (60Hz physics, interpolated rAF rendering) and a **spatial hash** for broad-phase collision detection.
+The whole thing runs on a custom **Entity Component System**,  entities are integers, components are Maps, queries use archetype caching. Below that sits a **fixed-timestep game loop** (60Hz physics, interpolated rAF rendering) and a **spatial hash** for broad-phase collision detection.
 
-The AI Director doesn't spawn enemies directly. It picks **encounter cards** — each card is a composition of enemies, formations, and intensity ratings. Three Director modes use this same card abstraction:
+The AI Director doesn't spawn enemies directly. It picks **encounter cards**, each card is a composition of enemies, formations, and intensity ratings. Three Director modes use this same card abstraction:
 
 - **Classic:** 30 hand-authored waves. Deterministic. Seeded RNG for replays.
 - **Adaptive:** Softmax bandit algorithm driven by a real-time player stress model.
@@ -122,49 +121,49 @@ Pick 1 of 3 every few waves. Each stacks 1-3 times.
 
 This is the part we're most proud of:
 
-1. **Stress Model** — Reads 6 real-time signals (HP ratio, enemy proximity, dodge frequency, DPS taken/given, combo). Outputs a smooth 0-1 stress score.
+1. **Stress Model**: Reads 6 real-time signals (HP ratio, enemy proximity, dodge frequency, DPS taken/given, combo). Outputs a smooth 0-1 stress score.
 
-2. **Director** — Consumes stress + telemetry to pick encounter cards. In Adaptive mode, it uses a softmax bandit that balances exploration vs exploitation. In LLM mode, it sends a structured state summary and gets back card picks + narrative.
+2. **Director**: Consumes stress + telemetry to pick encounter cards. In Adaptive mode, it uses a softmax bandit that balances exploration vs exploitation. In LLM mode, it sends a structured state summary and gets back card picks + narrative.
 
-3. **Telemetry** — Per-frame recording: movement heatmap, dodge tracking, DPS windows, build progression.
+3. **Telemetry**: Per-frame recording: movement heatmap, dodge tracking, DPS windows, build progression.
 
-4. **Coach** — After each run, generates a diagnostic report. Analyzes playstyle, identifies improvement areas, gives specific tips based on what actually happened.
+4. **Coach**: After each run, generates a diagnostic report. Analyzes playstyle, identifies improvement areas, gives specific tips based on what actually happened.
 
-5. **Planner-Critic** — Premium LLM mode. Planner proposes a wave plan, Critic reviews it for balance issues, planner adjusts. Two-agent deliberation loop.
+5. **Planner-Critic**: Premium LLM mode. Planner proposes a wave plan, Critic reviews it for balance issues, planner adjusts. Two-agent deliberation loop.
 
-6. **Analytics** — Event batching, privacy controls, local storage fallback.
+6. **Analytics**: Event batching, privacy controls, local storage fallback.
 
 ---
 
 ## Gamification
 
-- **Pilot Rank** — 20 ranks from Rookie to Legend. XP from waves, bosses, completions, no-hit bonuses.
-- **40 Achievements** — Combat, Survival, Mastery, and Fun categories. "Kill 1000 enemies." "Win without dashing." "Have all 15 upgrades."
-- **Daily Challenges** — 3 per day (easy/medium/hard), deterministic from date seed. Streak tracking.
-- **Leaderboard** — Top 50 local runs. Sort by score, wave, or kills. Seed sharing for challenge runs.
-- **Mastery** — Per-upgrade and per-enemy mastery tiers (Bronze → Diamond).
-- **Cosmetics** — 10 categories, 35+ items, 4 rarity tiers. Trails, death effects, bullet skins, titles.
-- **Battle Pass** — 30-tier seasonal system with free + premium tracks.
-- **Store** — Browse and purchase cosmetics with in-game coins earned from runs.
+- **Pilot Rank**: 20 ranks from Rookie to Legend. XP from waves, bosses, completions, no-hit bonuses.
+- **40 Achievements**: Combat, Survival, Mastery, and Fun categories. "Kill 1000 enemies." "Win without dashing." "Have all 15 upgrades."
+- **Daily Challenges**: 3 per day (easy/medium/hard), deterministic from date seed. Streak tracking.
+- **Leaderboard**: Top 50 local runs. Sort by score, wave, or kills. Seed sharing for challenge runs.
+- **Mastery**: Per-upgrade and per-enemy mastery tiers (Bronze → Diamond).
+- **Cosmetics**: 10 categories, 35+ items, 4 rarity tiers. Trails, death effects, bullet skins, titles.
+- **Battle Pass**: 30-tier seasonal system with free + premium tracks.
+- **Store**: Browse and purchase cosmetics with in-game coins earned from runs.
 
 ---
 
 ## Polish
 
-- **Procedural Audio** — All SFX generated via Web Audio API oscillators and noise. Shoot, hit, death, level up, wave clear, dash, game over, victory. Plus an ambient drone soundtrack. Zero audio files.
-- **CRT Filter** — Scanlines, vignette, subtle flicker. Toggle in settings.
-- **Screen Shake & Flash** — Juice on every hit and level up.
-- **Coach Report** — Post-run terminal overlay with CRT aesthetic.
-- **Onboarding Tutorial** — First-run interactive walkthrough covering all core mechanics.
-- **PWA** — Manifest + service worker. Install to homescreen, play offline.
-- **Object Pooling** — Particle and vector pools to reduce GC pressure at high entity counts.
-- **Settings** — LLM config (endpoint, key, model, token budget), audio sliders, visual toggles.
+- **Procedural Audio**: All SFX generated via Web Audio API oscillators and noise. Shoot, hit, death, level up, wave clear, dash, game over, victory. Plus an ambient drone soundtrack. Zero audio files.
+- **CRT Filter**: Scanlines, vignette, subtle flicker. Toggle in settings.
+- **Screen Shake & Flash**: Juice on every hit and level up.
+- **Coach Report**: Post-run terminal overlay with CRT aesthetic.
+- **Onboarding Tutorial**: First-run interactive walkthrough covering all core mechanics.
+- **PWA**: Manifest + service worker. Install to homescreen, play offline.
+- **Object Pooling**: Particle and vector pools to reduce GC pressure at high entity counts.
+- **Settings**: LLM config (endpoint, key, model, token budget), audio sliders, visual toggles.
 
 ---
 
 ## LLM Integration — Plug In Any Brain
 
-SURGE's LLM adapter is **provider-agnostic**. Any OpenAI-compatible API works out of the box:
+SURGE's LLM adapter is **provider-agnostic**. Any API works out of the box:
 
 | Provider | Endpoint Example | Notes |
 |----------|-----------------|-------|
@@ -176,7 +175,7 @@ SURGE's LLM adapter is **provider-agnostic**. Any OpenAI-compatible API works ou
 | **LM Studio** (local) | `http://localhost:1234` | No API key needed. Free. |
 | **vLLM** (local) | `http://localhost:8000` | No API key needed. Free. |
 
-Configure in **Settings** → enter your endpoint, API key (cloud only), and model name. Hit "Test Connection" to verify. That's it — the next run in LLM mode will use your model.
+Configure in **Settings** → enter your endpoint, API key (cloud only), and model name. Hit "Test Connection" to verify. That's it, the next run in LLM mode will use your model.
 
 > Local LLMs are auto-detected (localhost / 127.0.0.1) and skip API key validation.
 
@@ -200,15 +199,15 @@ Configure in **Settings** → enter your endpoint, API key (cloud only), and mod
 
 ## What's Next
 
-- **Publish as a mobile game** — This is the end goal. PWA-ready today, native wrapper tomorrow.
-- **Multiplayer co-op** — Swarm was best with friends. We want that back.
-- **Sprite assets** — Currently everything is code-rendered shapes. Real art would elevate it.
-- **Cloud leaderboard** — Global rankings via a simple serverless backend.
-- **More enemy types** — The FSM brain system makes adding new enemies straightforward.
-- **Unit tests** — The ECS, physics, and card systems are pure functions. Perfect candidates.
-- **TypeScript migration** — Catch API mismatches at compile time instead of runtime.
-- **Netcode** — The seeded RNG + fixed timestep was chosen specifically to enable future replay/spectator features.
+- **Publish as a mobile game**: This is the end goal. PWA-ready today, native wrapper tomorrow.
+- **Multiplayer co-op**: Swarm was best with friends. We want that back.
+- **Sprite assets**: Currently everything is code-rendered shapes. Real art would elevate it.
+- **Cloud leaderboard**:  Global rankings via a simple serverless backend.
+- **More enemy types**: The FSM brain system makes adding new enemies straightforward.
+- **Unit tests**: The ECS, physics, and card systems are pure functions. Perfect candidates.
+- **TypeScript migration**: Catch API mismatches at compile time instead of runtime.
+- **Netcode**: The seeded RNG + fixed timestep was chosen specifically to enable future replay/spectator features.
 
 ---
 
-*Built with ❤️ by Ayoub Chamakhi & Ghassen Chouikh — 2026*
+*Built with ❤️ by Ayoub Chamakhi & Ghassen Chouikh, 2026*

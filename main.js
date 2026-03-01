@@ -35,14 +35,14 @@ import { generateCoachReport } from './src/agents/coach.js';
 import { showReportScreen } from './src/ui/report-screen.js';
 
 // ─── UI ──────────────────────────────────────────────────────
-import { updateHud, renderHud, setHudHealth, setHudScore, setHudWave, setHudXp, setHudUpgrades, setHudDash, setHudEnemyCount, setHudLevel, incrementCombo, showFlash, resetHud } from './src/ui/hud.js';
+import { updateHud, renderHud, setHudHealth, setHudScore, setHudWave, setHudXp, setHudUpgrades, setHudDash, setHudEnemyCount, setHudLevel, incrementCombo, showFlash, resetHud, setLlmOverlay, setLlmOverlayVisible, isLlmOverlayVisible } from './src/ui/hud.js';
 import { detectTouch, updateTouchControls, renderTouchControls } from './src/ui/touch-controls.js';
 
 // ─── Upgrades ────────────────────────────────────────────────
 import { UPGRADE_DEFS, resetUpgrades, rollUpgradeChoices, applyUpgrade as applyUpgradeToPlayer, getStack, getUpgradeDef, getAllStacks } from './src/game/upgrades.js';
 
 // ─── Config ──────────────────────────────────────────────────
-import { SCREEN, PLAYER, TIMING, SCORE, UPGRADES } from './src/config/balance.js';
+import { SCREEN, PLAYER, TIMING, SCORE, UPGRADES, ARENA } from './src/config/balance.js';
 import { getColor, setPalette } from './src/config/palettes.js';
 
 // ─── Phase 4: LLM Director ──────────────────────────────────
@@ -63,6 +63,9 @@ import { initStoreScreen, showStoreScreen, hideStoreScreen } from './src/ui/stor
 
 // ─── Phase 7: Analytics ──────────────────────────────────────
 import { initAnalytics, trackRunEnd, trackWaveComplete, shutdownAnalytics } from './src/agents/analytics.js';
+
+// ─── Chests ──────────────────────────────────────────────────
+import { trySpawnChest, updateChests, renderChests, clearChests } from './src/game/chests.js';
 
 // ─── Phase 8: Polish ─────────────────────────────────────────
 import { initAudio, resumeAudio, sfxShoot, sfxHitEnemy, sfxHitPlayer, sfxEnemyDeath, sfxLevelUp, sfxWaveStart, sfxWaveClear, sfxDash, sfxUpgrade, sfxGameOver, sfxVictory, sfxClick, startMusic, stopMusic, setMasterVolume, setSfxVolume, setMusicVolume, getAudioSettings } from './src/audio/audio-engine.js';
@@ -185,6 +188,7 @@ function startRun() {
   // Clean slate
   world.reset();
   clearParticles();
+  clearChests();
   resetHud();
   resetUpgrades();
 
@@ -242,10 +246,11 @@ function endRun(reason) {
   currentState = reason === 'victory' ? GAME_STATE.VICTORY : GAME_STATE.GAMEOVER;
 
   // Capture run summary before shutdown
-  const runSummary = getRunSummary();
-  shutdownTelemetry();
-  shutdownStressModel();
-  shutdownDirector();
+  let runSummary = null;
+  try { runSummary = getRunSummary(); } catch (e) { console.error('[endRun] getRunSummary failed:', e); }
+  try { shutdownTelemetry(); } catch (e) { console.error('[endRun] shutdownTelemetry failed:', e); }
+  try { shutdownStressModel(); } catch (e) { console.error('[endRun] shutdownStressModel failed:', e); }
+  try { shutdownDirector(); } catch (e) { console.error('[endRun] shutdownDirector failed:', e); }
   engine.pause();
   stopMusic();
 
@@ -253,6 +258,7 @@ function endRun(reason) {
   const mode = document.getElementById('sel-mode')?.value || 'classic';
 
   // Build run data for gamification systems
+  const allStacks = getAllStacks();
   const runData = {
     wave: waveReached,
     score,
@@ -261,29 +267,44 @@ function endRun(reason) {
     level,
     mode,
     victory: reason === 'victory',
-    upgrades: getAllStacks(),
+    upgrades: allStacks,
     killsByType: runSummary?.killsByType || {},
     noHitWaves: runSummary?.noHitWaves || 0,
     eliteKills: runSummary?.eliteKills || 0,
     bossKills: runSummary?.bossKills || 0,
     maxCombo: runSummary?.maxCombo || 0,
     avgStress: runSummary?.avgStress || 0.5,
+    totalKills: killCount,
+    wavesCleared: waveReached,
+    runTime: Math.floor(runTime),
+    score: score,
+    // Daily challenge fields
+    completed: reason === 'victory',
+    killEfficiency: runTime > 0 ? killCount / runTime : 0,
+    usedDash: runSummary?.usedDash ?? true,
+    usedRegen: (allStacks.regen || 0) > 0,
+    projectileOnly: _isProjectileOnly(allStacks),
+    defenseOnly: _isDefenseOnly(allStacks),
+    lowHpWaves: runSummary?.lowHpWaves || 0,
   };
 
-  // Phase 5: Gamification
-  const rankResult = addRunXp(runData);
-  const newAchievements = checkAchievements(runData);
-  const dailyResults = checkDailyChallenges(runData);
-  addLeaderboardEntry(runData);
-  recordMastery(runData);
+  // Phase 5: Gamification (each wrapped to prevent crashes)
+  let rankResult = null;
+  let newAchievements = [];
+  let dailyResults = null;
+  try { rankResult = addRunXp(runData); } catch (e) { console.error('[endRun] addRunXp:', e); }
+  try { newAchievements = checkAchievements(runData); } catch (e) { console.error('[endRun] checkAchievements:', e); }
+  try { dailyResults = checkDailyChallenges(runData); } catch (e) { console.error('[endRun] checkDailyChallenges:', e); }
+  try { addLeaderboardEntry(runData); } catch (e) { console.error('[endRun] addLeaderboardEntry:', e); }
+  try { recordMastery(runData); } catch (e) { console.error('[endRun] recordMastery:', e); }
 
   // Phase 6: Cosmetics — award coins based on performance
   const coinReward = Math.floor(waveReached * 3 + killCount * 0.5 + (reason === 'victory' ? 100 : 0));
-  addCoins(coinReward);
-  addBattlePassXp(Math.floor(waveReached * 10 + killCount));
+  try { addCoins(coinReward); } catch (e) { console.error('[endRun] addCoins:', e); }
+  try { addBattlePassXp(Math.floor(waveReached * 10 + killCount)); } catch (e) { console.error('[endRun] addBattlePassXp:', e); }
 
   // Phase 7: Analytics
-  trackRunEnd(runData);
+  try { trackRunEnd(runData); } catch (e) { console.error('[endRun] trackRunEnd:', e); }
 
   // Audio
   if (reason === 'victory') sfxVictory(); else sfxGameOver();
@@ -299,11 +320,8 @@ function endRun(reason) {
     ${rankResult?.leveledUp ? `<br>⬆ Rank Up: ${rankResult.title}!` : ''}
   `;
 
-  // Generate Coach Report
-  const coachReport = generateCoachReport(runSummary);
-
-  // Show coach report first, then show game over / victory screen
-  showReportScreen(coachReport, () => {
+  // Show game over / victory screen (always, even if coach report fails)
+  const showEndScreen = () => {
     if (reason === 'victory') {
       $vicStats.innerHTML = statsHtml;
       showScreen('victory-screen');
@@ -311,7 +329,58 @@ function endRun(reason) {
       $goStats.innerHTML = statsHtml;
       showScreen('gameover-screen');
     }
-  });
+  };
+
+  // Generate Coach Report
+  try {
+    const coachReport = generateCoachReport(runSummary || _fallbackSummary());
+    showReportScreen(coachReport, showEndScreen);
+  } catch (e) {
+    console.error('[endRun] Coach report failed:', e);
+    showEndScreen();
+  }
+}
+
+/** Minimal fallback summary if telemetry failed */
+function _fallbackSummary() {
+  return {
+    runTime: Math.floor(runTime),
+    predictability: 0.5,
+    dodgeRate: 0,
+    closeDodgesTotal: 0,
+    totalKills: killCount,
+    killsByType: {},
+    killEfficiency: runTime > 0 ? killCount / runTime : 0,
+    peakEnemyCount: 0,
+    totalDamageTaken: 0,
+    damageBySource: {},
+    damageTimeline: [],
+    upgrades: [],
+    waves: [],
+    wavesCleared: getDirectorState().wave,
+    avgWaveDuration: 0,
+    fastestWave: null,
+    slowestWave: null,
+    directorDecisions: [],
+    heatmap: new Float32Array(96),
+    hotspot: { col: 4, row: 6 },
+  };
+}
+
+/** Check if player only picked weapon (projectile) upgrades */
+const WEAPON_IDS = new Set(['spread_shot', 'pierce', 'fire_rate', 'damage', 'homing', 'ricochet']);
+const DEFENSE_IDS = new Set(['shield', 'dash_cd', 'slow_aura', 'regen', 'armor']);
+
+function _isProjectileOnly(stacks) {
+  const picked = Object.entries(stacks).filter(([, v]) => v > 0);
+  if (picked.length === 0) return false;
+  return picked.every(([id]) => WEAPON_IDS.has(id));
+}
+
+function _isDefenseOnly(stacks) {
+  const picked = Object.entries(stacks).filter(([, v]) => v > 0);
+  if (picked.length === 0) return false;
+  return picked.every(([id]) => DEFENSE_IDS.has(id));
 }
 
 // ─── Engine Callbacks ────────────────────────────────────────
@@ -329,6 +398,9 @@ engine.onUpdate = (dt) => {
   if (input.pause) {
     currentState = GAME_STATE.PAUSED;
     engine.pause();
+    // Sync LLM overlay checkbox
+    const $chk = document.getElementById('chk-llm-overlay');
+    if ($chk) $chk.checked = isLlmOverlayVisible();
     showScreen('pause-screen');
     return;
   }
@@ -376,6 +448,9 @@ engine.onUpdate = (dt) => {
   // Director (wave management)
   updateDirector(dt);
 
+  // Chests
+  updateChests(dt, { addCoins: (n) => { try { addCoins(n); } catch {} }, addXp });
+
   // Particles
   updateParticles(dt);
 
@@ -392,6 +467,15 @@ engine.onUpdate = (dt) => {
     setHudLevel(level);
   }
   setHudEnemyCount(getEnemyCount());
+
+  // Feed LLM overlay with director state
+  const dirState = getDirectorState();
+  setLlmOverlay({
+    mode: dirState.mode || '',
+    cards: dirState.currentCards || [],
+    rationale: dirState.rationale || '',
+    tip: getLLMTip() || '',
+  });
 
   // Regen
   if (playerData && playerData.upgrades?.regen > 0) {
@@ -417,6 +501,7 @@ engine.onRender = (alpha) => {
   // Render game objects
   renderEnemies(ctx);
   renderBullets(ctx);
+  renderChests(ctx);
   renderPlayer(ctx);
   renderParticles(ctx);
 
@@ -453,6 +538,10 @@ bus.on('wave:clear', (wave) => {
   showFlash('WAVE CLEAR!', 1.0);
   addScore(wave * SCORE.PER_WAVE);
   sfxWaveClear();
+  // Try spawning a chest at a random arena position on wave clear
+  const cx = ARENA.LEFT + Math.random() * ARENA.WIDTH;
+  const cy = ARENA.TOP + Math.random() * ARENA.HEIGHT;
+  trySpawnChest(cx, cy, 'wave');
 });
 
 bus.on('upgrade:offered', () => {
@@ -478,6 +567,10 @@ bus.on('enemy:death', (id, data) => {
       ? [getColor(9), getColor(12), getColor(15)]
       : [getColor(6), getColor(9), getColor(15)];
     spawnDeathBurst(data.x, data.y, colors, data.isBoss ? 24 : 12);
+
+    // Chest drop chance on elite/boss kills
+    if (data.isBoss) trySpawnChest(data.x, data.y, 'boss');
+    else if (data.isElite) trySpawnChest(data.x, data.y, 'elite');
   }
 });
 
@@ -501,6 +594,10 @@ bus.on('player:levelup', (lv) => {
   showFlash(`LEVEL ${lv}!`, 1.5);
   triggerFlash(getColor(12));
   sfxLevelUp();
+});
+
+bus.on('chest:collected', ({ reward }) => {
+  showFlash(reward.label, 0.8);
 });
 
 // ─── Button Handlers ─────────────────────────────────────────
@@ -534,6 +631,12 @@ document.getElementById('btn-quit').addEventListener('click', () => {
   stopMusic();
   engine.pause();
 });
+
+// LLM overlay toggle (pause screen)
+document.getElementById('chk-llm-overlay')?.addEventListener('change', (e) => {
+  setLlmOverlayVisible(e.target.checked);
+});
+
 document.getElementById('btn-vic-retry').addEventListener('click', () => { sfxClick(); startRun(); });
 document.getElementById('btn-vic-menu').addEventListener('click', () => {
   sfxClick();
@@ -578,6 +681,57 @@ document.getElementById('btn-test-llm')?.addEventListener('click', async () => {
   }
 });
 
+// Fetch models from API
+async function fetchAndPopulateModels() {
+  const $model = document.getElementById('set-model');
+  const $result = document.getElementById('llm-test-result');
+  const endpoint = document.getElementById('set-endpoint')?.value || '';
+  const apiKey = document.getElementById('set-apikey')?.value || '';
+  if (!endpoint) return;
+
+  const currentVal = $model?.value || '';
+  if ($result) $result.textContent = 'Fetching models...';
+
+  try {
+    resetLLMAdapter();
+    const adapter = getLLMAdapter({ endpoint, apiKey, model: currentVal || 'gpt-4o-mini' });
+    const models = await adapter.fetchModels();
+
+    if (models.length > 0 && $model) {
+      $model.innerHTML = '';
+      for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name;
+        if (m.id === currentVal) opt.selected = true;
+        $model.appendChild(opt);
+      }
+      // If saved model wasn't in the list, select first
+      if (!models.some(m => m.id === currentVal)) {
+        $model.value = models[0].id;
+      }
+      if ($result) $result.textContent = `✓ ${models.length} model${models.length > 1 ? 's' : ''} found`;
+    } else {
+      if ($result) $result.textContent = 'No models returned — check endpoint/key';
+    }
+  } catch (e) {
+    if ($result) $result.textContent = `✗ ${e.message}`;
+  }
+}
+
+document.getElementById('btn-fetch-models')?.addEventListener('click', () => {
+  fetchAndPopulateModels();
+});
+
+// Auto-fetch models when API key or endpoint is filled in
+let _fetchDebounce = null;
+function _debounceFetchModels() {
+  if (_fetchDebounce) clearTimeout(_fetchDebounce);
+  _fetchDebounce = setTimeout(() => fetchAndPopulateModels(), 800);
+}
+document.getElementById('set-apikey')?.addEventListener('input', _debounceFetchModels);
+document.getElementById('set-endpoint')?.addEventListener('change', _debounceFetchModels);
+
 // Audio sliders
 document.getElementById('set-master-vol')?.addEventListener('input', (e) => {
   setMasterVolume(e.target.value / 100);
@@ -606,9 +760,27 @@ function loadSettingsUI() {
   const $premium = document.getElementById('set-premium');
   if ($ep) $ep.value = settings.llmEndpoint || '';
   if ($key) $key.value = settings.llmApiKey || '';
-  if ($model) $model.value = settings.llmModel || 'gpt-4o-mini';
+
+  // Ensure saved model is an option in the select
+  if ($model) {
+    const savedModel = settings.llmModel || 'gpt-4o-mini';
+    // If the saved model isn't in the current options, add it
+    if (![...$model.options].some(o => o.value === savedModel)) {
+      const opt = document.createElement('option');
+      opt.value = savedModel;
+      opt.textContent = savedModel;
+      $model.appendChild(opt);
+    }
+    $model.value = savedModel;
+  }
+
   if ($tokens) $tokens.value = settings.llmTokens || 4000;
   if ($premium) $premium.checked = settings.llmPremium || false;
+
+  // Auto-fetch models if endpoint is configured
+  if (settings.llmEndpoint) {
+    setTimeout(() => fetchAndPopulateModels(), 300);
+  }
 
   // Audio
   const audio = getAudioSettings();
@@ -732,13 +904,16 @@ function renderDailyUI() {
   const $streak = document.getElementById('daily-streak');
   if (!$list) return;
 
+  const DIFF_LABELS = { 1: 'EASY', 2: 'MED', 3: 'HARD' };
+  const DIFF_CLASSES = { 1: 'daily-easy', 2: 'daily-medium', 3: 'daily-hard' };
+
   const challenges = getDailyChallenges();
   $list.innerHTML = challenges.map(c => `
     <div class="daily-item ${c.completed ? 'daily-done' : ''}">
-      <div class="daily-diff daily-${c.difficulty}">${c.difficulty.toUpperCase()}</div>
+      <div class="daily-diff ${DIFF_CLASSES[c.difficulty] || ''}">${DIFF_LABELS[c.difficulty] || c.difficulty}</div>
       <div class="daily-info">
-        <div class="daily-name">${c.name}</div>
-        <div class="daily-desc">${c.desc}</div>
+        <div class="daily-name">${c.desc}</div>
+        <div class="daily-reward">🪙 ${c.reward} XP</div>
       </div>
       <div class="daily-status">${c.completed ? '✓' : '○'}</div>
     </div>

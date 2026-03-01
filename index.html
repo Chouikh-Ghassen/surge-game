@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0a0a0b">
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <title>SURGE</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -63,6 +64,9 @@
     <!-- Pause Overlay -->
     <div id="pause-screen" class="screen">
       <div class="title">PAUSED</div>
+      <label class="option-label pause-toggle">
+        <input id="chk-llm-overlay" type="checkbox" checked /> Show AI Decisions
+      </label>
       <button id="btn-resume" class="btn">▶ RESUME</button>
       <button id="btn-quit" class="btn btn-secondary">✕ QUIT</button>
     </div>
@@ -86,7 +90,12 @@
             <input id="set-apikey" class="set-input" type="password" placeholder="sk-..." />
           </label>
           <label class="option-label">Model
-            <input id="set-model" class="set-input" type="text" placeholder="gpt-4o-mini" />
+            <div class="model-picker">
+              <select id="set-model" class="set-input">
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
+              </select>
+              <button id="btn-fetch-models" class="btn btn-secondary btn-sm" type="button">⟳</button>
+            </div>
           </label>
           <label class="option-label">Token Budget
             <input id="set-tokens" class="set-input" type="number" value="4000" min="500" max="50000" />
