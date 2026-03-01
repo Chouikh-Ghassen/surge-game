@@ -172,4 +172,4 @@ This is the part I'm most proud of:
 
 ---
 
-*Built by Ayoub Chamakhi — 2026*
+*Built by Ayoub Chamakhi & Ghassen Chouikh — 2026*
