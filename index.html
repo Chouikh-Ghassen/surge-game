@@ -19,8 +19,23 @@
     <div id="menu-screen" class="screen active">
       <div class="title">SURGE</div>
       <div class="subtitle">BULLET HEAVEN</div>
+      <div class="menu-options">
+        <label class="option-label">Palette
+          <select id="sel-palette" class="sel">
+            <option value="moss" selected>Moss</option>
+            <option value="ember">Ember</option>
+          </select>
+        </label>
+        <label class="option-label">Mode
+          <select id="sel-mode" class="sel">
+            <option value="classic" selected>Classic (30 waves)</option>
+            <option value="adaptive" disabled>Adaptive (soon)</option>
+            <option value="llm" disabled>LLM Director (soon)</option>
+          </select>
+        </label>
+      </div>
       <button id="btn-play" class="btn">▶ PLAY</button>
-      <div class="version">v0.1.0 — Phase 1</div>
+      <div class="version">v0.2.0 — Phase 2</div>
     </div>
 
     <!-- Game Over Screen -->

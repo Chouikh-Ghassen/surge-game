@@ -15,6 +15,7 @@ import world from '../core/ecs.js';
 import bus from '../core/events.js';
 import { ENEMIES } from '../config/balance.js';
 import { getColor } from '../config/palettes.js';
+import { drawPolygon, drawCircleOutline } from '../ui/renderer.js';
 
 // ─── Constants ──────────────────────────────────────────────
 
@@ -22,7 +23,7 @@ import { getColor } from '../config/palettes.js';
 const TAU = Math.PI * 2;
 
 /**
- * @typedef {'drifter'|'dasher'|'sprayer'|'orbitor'|'splitter'|'shielder'} EnemyType
+ * @typedef {'drifter'|'dasher'|'sprayer'|'orbitor'|'splitter'|'splitter_child'|'shielder'} EnemyType
  */
 
 /**
@@ -133,6 +134,93 @@ const ENEMY_TEMPLATES = {
       barrelAngle: 0,
     },
   }),
+
+  orbitor: (cfg) => ({
+    type: 'orbitor',
+    hp: cfg.hp,
+    maxHp: cfg.hp,
+    radius: cfg.radius,
+    damage: cfg.damage,
+    speed: cfg.speed,
+    score: cfg.score,
+    xp: cfg.xp,
+    isElite: false,
+    isBoss: false,
+    state: 'idle',
+    stateTimer: 0,
+    behaviorParams: {
+      /** Desired orbit radius around player (px) */
+      orbitRadius: cfg.orbitRadius,
+      /** Angular speed around orbit (rad/s) */
+      orbitSpeed: cfg.orbitSpeed,
+      /** Current orbit angle */
+      orbitAngle: Math.random() * TAU,
+      /** Seconds between inward shots */
+      fireRate: cfg.fireRate,
+      /** Countdown to next shot */
+      fireTimer: cfg.fireRate * Math.random(),
+      /** Bullet speed toward player */
+      bulletSpeed: cfg.bulletSpeed,
+    },
+  }),
+
+  splitter: (cfg) => ({
+    type: 'splitter',
+    hp: cfg.hp,
+    maxHp: cfg.hp,
+    radius: cfg.radius,
+    damage: cfg.damage,
+    speed: cfg.speed,
+    score: cfg.score,
+    xp: cfg.xp,
+    isElite: false,
+    isBoss: false,
+    state: 'idle',
+    stateTimer: 0,
+    behaviorParams: {
+      /** Number of children on death */
+      splitCount: cfg.splitCount,
+    },
+  }),
+
+  splitter_child: (cfg) => ({
+    type: 'splitter_child',
+    hp: cfg.splitHP,
+    maxHp: cfg.splitHP,
+    radius: cfg.splitRadius,
+    damage: cfg.damage,
+    speed: cfg.splitSpeed,
+    score: Math.round(cfg.score / 3),
+    xp: 1,
+    isElite: false,
+    isBoss: false,
+    state: 'idle',
+    stateTimer: 0,
+    behaviorParams: {},
+  }),
+
+  shielder: (cfg) => ({
+    type: 'shielder',
+    hp: cfg.hp,
+    maxHp: cfg.hp,
+    radius: cfg.radius,
+    damage: cfg.damage,
+    speed: cfg.speed,
+    score: cfg.score,
+    xp: cfg.xp,
+    isElite: false,
+    isBoss: false,
+    state: 'idle',
+    stateTimer: 0,
+    behaviorParams: {
+      /** Radius of damage-reduction aura (px) */
+      shieldRadius: cfg.shieldRadius,
+      /** Damage multiplier for shielded allies (0.5 = 50% reduction) */
+      shieldDamageReduction: cfg.shieldDamageReduction,
+      /** Entity ID of currently escorted ally (-1 = none) */
+      escortTarget: -1,
+    },
+  }),
 };
 
 // ─── Factory ────────────────────────────────────────────────
@@ -153,7 +241,8 @@ const ENEMY_TEMPLATES = {
  * @returns {number}  Entity ID of the spawned enemy
  */
 export function spawnEnemy(type, x, y, options = {}) {
-  const typeKey = type.toUpperCase();
+  // splitter_child has no dedicated config key — derive from SPLITTER
+  const typeKey = (type === 'splitter_child') ? 'SPLITTER' : type.toUpperCase();
   const cfg = ENEMIES[typeKey];
 
   if (!cfg) {
@@ -162,8 +251,10 @@ export function spawnEnemy(type, x, y, options = {}) {
   }
 
   // Build template (fall back to drifter if no template yet)
+  // splitter_child reuses the parent SPLITTER config
+  const templateCfg = (type === 'splitter_child') ? ENEMIES.SPLITTER : cfg;
   const templateFn = ENEMY_TEMPLATES[type] || ENEMY_TEMPLATES.drifter;
-  const enemy = templateFn(cfg);
+  const enemy = templateFn(templateCfg);
 
   // ── Apply elite modifier ──
   if (options.elite) {
@@ -274,6 +365,28 @@ export function killEnemy(id) {
  * @param {{ x: number, y: number }} pos
  */
 function _handleDeath(id, enemy, pos) {
+  // ── Splitter death: spawn children ──
+  if (enemy.type === 'splitter') {
+    const cfg = ENEMIES.SPLITTER;
+    const count = cfg.splitCount || 2;
+    for (let i = 0; i < count; i++) {
+      const angle = (TAU / count) * i + Math.random() * 0.4;
+      const offset = enemy.radius + 4;
+      const cx = pos.x + Math.cos(angle) * offset;
+      const cy = pos.y + Math.sin(angle) * offset;
+      spawnEnemy('splitter_child', cx, cy);
+    }
+  }
+
+  // ── Boss phase transition: invulnerability + flash ──
+  if (enemy.isBoss && enemy.hp > 0) {
+    const hpRatio = enemy.hp / enemy.maxHp;
+    if (hpRatio <= 0.5 && !enemy._phaseTrigger) {
+      enemy._phaseTrigger = true;
+      bus.emit('boss:phase', id, 0.5);
+    }
+  }
+
   bus.emit('enemy:death', id, {
     type: enemy.type,
     x: pos.x,
@@ -308,19 +421,53 @@ export function renderEnemies(ctx) {
     const enemy = world.get(id, 'enemy');
 
     switch (enemy.type) {
-      case 'drifter': _renderDrifter(ctx, pos, enemy); break;
-      case 'dasher':  _renderDasher(ctx, pos, enemy);  break;
-      case 'sprayer': _renderSprayer(ctx, pos, enemy);  break;
-      default:        _renderFallback(ctx, pos, enemy); break;
+      case 'drifter':       _renderDrifter(ctx, pos, enemy);       break;
+      case 'dasher':        _renderDasher(ctx, pos, enemy);        break;
+      case 'sprayer':       _renderSprayer(ctx, pos, enemy);       break;
+      case 'orbitor':       _renderOrbitor(ctx, pos, enemy);       break;
+      case 'splitter':      _renderSplitter(ctx, pos, enemy);      break;
+      case 'splitter_child':_renderSplitterChild(ctx, pos, enemy); break;
+      case 'shielder':      _renderShielder(ctx, pos, enemy);      break;
+      default:              _renderFallback(ctx, pos, enemy);      break;
     }
 
-    // ── Elite/Boss glow ring ──
-    if (enemy.isElite || enemy.isBoss) {
-      ctx.strokeStyle = enemy.isBoss ? getColor(15) : getColor(13);
-      ctx.lineWidth = enemy.isBoss ? 2 : 1;
+    // ── Elite halo/crown marker ──
+    if (enemy.isElite && !enemy.isBoss) {
+      ctx.strokeStyle = getColor(13);
+      ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, enemy.radius + 3, 0, TAU);
       ctx.stroke();
+      // Crown accent above shape
+      const crownY = pos.y - enemy.radius - 4;
+      ctx.fillStyle = getColor(13);
+      ctx.beginPath();
+      ctx.moveTo(pos.x - 3, crownY);
+      ctx.lineTo(pos.x - 1, crownY - 3);
+      ctx.lineTo(pos.x + 1, crownY - 3);
+      ctx.lineTo(pos.x + 3, crownY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // ── Boss glow ring + crown accent ──
+    if (enemy.isBoss) {
+      ctx.strokeStyle = getColor(15);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, enemy.radius + 4, 0, TAU);
+      ctx.stroke();
+      // Crown accent (larger)
+      const crownY = pos.y - enemy.radius - 5;
+      ctx.fillStyle = getColor(15);
+      ctx.beginPath();
+      ctx.moveTo(pos.x - 5, crownY);
+      ctx.lineTo(pos.x - 3, crownY - 4);
+      ctx.lineTo(pos.x,     crownY - 2);
+      ctx.lineTo(pos.x + 3, crownY - 4);
+      ctx.lineTo(pos.x + 5, crownY);
+      ctx.closePath();
+      ctx.fill();
     }
 
     // ── HP bar (only if damaged) ──
@@ -433,6 +580,52 @@ function _renderSprayer(ctx, pos, enemy) {
   ctx.lineTo(bx, by);
   ctx.stroke();
   ctx.lineWidth = 1;
+}
+
+/**
+ * Orbitor: pentagon — circles player and fires inward.
+ * @private
+ */
+function _renderOrbitor(ctx, pos, enemy) {
+  const colorIdx = 6 + (ENEMIES.ORBITOR.color || 3);
+  const angle = enemy.behaviorParams.orbitAngle || 0;
+  drawPolygon(pos.x, pos.y, enemy.radius, 5, angle, getColor(colorIdx));
+}
+
+/**
+ * Splitter: hexagon — splits into children on death.
+ * @private
+ */
+function _renderSplitter(ctx, pos, enemy) {
+  const colorIdx = 6 + (ENEMIES.SPLITTER.color || 4);
+  drawPolygon(pos.x, pos.y, enemy.radius, 6, 0, getColor(colorIdx));
+}
+
+/**
+ * Splitter child: smaller hexagon.
+ * @private
+ */
+function _renderSplitterChild(ctx, pos, enemy) {
+  // Slightly different tint — one index brighter
+  const colorIdx = 6 + (ENEMIES.SPLITTER.color || 4) + 1;
+  drawPolygon(pos.x, pos.y, enemy.radius, 6, 0, getColor(colorIdx));
+}
+
+/**
+ * Shielder: octagon with semi-transparent aura ring.
+ * @private
+ */
+function _renderShielder(ctx, pos, enemy) {
+  const colorIdx = 6 + (ENEMIES.SHIELDER.color || 5);
+  const bp = enemy.behaviorParams;
+
+  // Aura ring (semi-transparent)
+  ctx.globalAlpha = 0.25;
+  drawCircleOutline(pos.x, pos.y, bp.shieldRadius, getColor(colorIdx), 1.5);
+  ctx.globalAlpha = 1.0;
+
+  // Octagon body
+  drawPolygon(pos.x, pos.y, enemy.radius, 8, 0, getColor(colorIdx));
 }
 
 /**

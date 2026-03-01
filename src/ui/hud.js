@@ -23,6 +23,14 @@ const hud = {
   flashTimer: 0,
   /** Kill feed entries */
   killFeed: [],
+  /** Active upgrade stacks {id: stack} — set externally each frame */
+  upgrades: {},
+  /** Dash cooldown ratio 0-1 (1 = ready) */
+  dashReady: 1,
+  /** Enemy count on screen */
+  enemyCount: 0,
+  /** Level number */
+  level: 1,
 };
 
 // ─── Public API ──────────────────────────────────────────────
@@ -135,6 +143,42 @@ export function resetHud() {
   hud.flash = null;
   hud.flashTimer = 0;
   hud.killFeed = [];
+  hud.upgrades = {};
+  hud.dashReady = 1;
+  hud.enemyCount = 0;
+  hud.level = 1;
+}
+
+/**
+ * Set the active upgrades for the HUD to display.
+ * @param {Record<string, number>} stacks
+ */
+export function setHudUpgrades(stacks) {
+  hud.upgrades = stacks;
+}
+
+/**
+ * Set dash cooldown readiness (0 = on cooldown, 1 = ready).
+ * @param {number} ratio
+ */
+export function setHudDash(ratio) {
+  hud.dashReady = ratio;
+}
+
+/**
+ * Set current enemy count for HUD display.
+ * @param {number} count
+ */
+export function setHudEnemyCount(count) {
+  hud.enemyCount = count;
+}
+
+/**
+ * Set current level.
+ * @param {number} lv
+ */
+export function setHudLevel(lv) {
+  hud.level = lv;
 }
 
 // ─── Render ──────────────────────────────────────────────────
@@ -144,8 +188,8 @@ export function resetHud() {
  * @param {CanvasRenderingContext2D} ctx
  */
 export function renderHud(ctx) {
-  const W = SCREEN.W;
-  const H = SCREEN.H;
+  const W = SCREEN.WIDTH;
+  const H = SCREEN.HEIGHT;
 
   // ── Health bar (top-left) ──
   _drawHealthBar(ctx, 4, 4, 80, 6);
@@ -160,6 +204,12 @@ export function renderHud(ctx) {
   ctx.textAlign = 'right';
   ctx.fillText(`${hud.score}`, W - 4, 10);
 
+  // ── Level indicator (below wave) ──
+  ctx.fillStyle = getColor(12);
+  ctx.font = '5px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(`LV ${hud.level}`, W / 2, 17);
+
   // ── Combo counter (left under health) ──
   if (hud.comboCount > 1) {
     const alpha = Math.min(1, hud.comboTimer);
@@ -170,6 +220,20 @@ export function renderHud(ctx) {
     ctx.fillText(`${hud.comboCount}x COMBO`, 4, 20);
     ctx.globalAlpha = 1;
   }
+
+  // ── Enemy count (top-right, under score) ──
+  if (hud.enemyCount > 0) {
+    ctx.fillStyle = getColor(6); // red-ish
+    ctx.font = '5px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`×${hud.enemyCount}`, W - 4, 17);
+  }
+
+  // ── Dash Cooldown indicator (left side, below combo) ──
+  _drawDashIndicator(ctx, 4, 25);
+
+  // ── Upgrade Icons (bottom-left, above XP) ──
+  _drawUpgradeIcons(ctx, 4, H - 16);
 
   // ── XP bar (bottom) ──
   _drawXpBar(ctx, 20, H - 8, W - 40, 3);
@@ -193,7 +257,7 @@ export function renderHud(ctx) {
     const alpha = Math.min(1, entry.timer * 2);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = getColor(10); // green-ish
-    ctx.fillText(entry.text, W - 4, 22 + i * 7);
+    ctx.fillText(entry.text, W - 4, 24 + i * 7);
   }
   ctx.globalAlpha = 1;
 
@@ -261,6 +325,101 @@ function _drawXpBar(ctx, x, y, w, h) {
   ctx.strokeStyle = getColor(3);
   ctx.lineWidth = 0.5;
   ctx.strokeRect(x, y, w, h);
+}
+
+/**
+ * Draw dash readiness indicator — a small arc that fills as cooldown recharges.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x
+ * @param {number} y
+ */
+function _drawDashIndicator(ctx, x, y) {
+  const r = 4;
+  const cx = x + r;
+  const cy = y + r;
+
+  // Background arc
+  ctx.globalAlpha = 0.3;
+  ctx.strokeStyle = getColor(3);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Fill arc
+  if (hud.dashReady >= 1) {
+    // Ready — pulse green
+    const pulse = 0.5 + Math.sin(Date.now() * 0.008) * 0.3;
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = getColor(10);
+  } else {
+    ctx.globalAlpha = 0.8;
+    ctx.strokeStyle = getColor(9);
+  }
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + hud.dashReady * Math.PI * 2);
+  ctx.stroke();
+
+  // Label
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = getColor(15);
+  ctx.font = '3px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('DSH', cx, cy + 1.5);
+  ctx.textAlign = 'left';
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * Draw small icons for active upgrades (compact strip).
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x
+ * @param {number} y
+ */
+function _drawUpgradeIcons(ctx, x, y) {
+  const ICON_CHARS = {
+    spread_shot: 'S', pierce: 'P', fire_rate: 'F', damage: 'D',
+    homing: 'H', ricochet: 'R', shield: '■', dash_cd: '»',
+    slow_aura: '~', regen: '+', armor: 'A',
+    magnet: 'M', nuke: '★', decoy: '△', scanner: '◎',
+  };
+
+  const active = Object.entries(hud.upgrades).filter(([, v]) => v > 0);
+  if (active.length === 0) return;
+
+  let ox = x;
+  ctx.font = '5px monospace';
+
+  for (const [id, stack] of active) {
+    const ch = ICON_CHARS[id] || '?';
+
+    // Icon background
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = getColor(2);
+    ctx.fillRect(ox, y, 8, 7);
+
+    // Icon character
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = getColor(10);
+    ctx.textAlign = 'center';
+    ctx.fillText(ch, ox + 4, y + 5.5);
+
+    // Stack count (bottom-right)
+    if (stack > 1) {
+      ctx.fillStyle = getColor(9);
+      ctx.font = '3px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${stack}`, ox + 8, y + 7);
+      ctx.font = '5px monospace';
+    }
+
+    ox += 9;
+    if (ox > SCREEN.WIDTH - 30) break; // Don't overflow
+  }
+
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
 }
 
 export { hud };

@@ -184,6 +184,56 @@ html, body {
   margin-top: 3px;
 }
 
+.upgrade-card .category {
+  font-size: 7px;
+  color: #667744;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+}
+
+/* ─── Menu Options (palette / mode selectors) ─────────────── */
+
+.menu-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+  width: 80%;
+  max-width: 200px;
+}
+
+.option-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: #888;
+  letter-spacing: 1px;
+}
+
+.sel {
+  background: #1a1a1b;
+  color: #aaff44;
+  border: 1px solid #333;
+  border-radius: 2px;
+  padding: 4px 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.sel:focus {
+  outline: none;
+  border-color: #aaff44;
+}
+
+.sel option[disabled] {
+  color: #555;
+}
+
 /* ─── Safe Area Handling (iPhone notch) ───────────────────── */
 
 @supports (padding: env(safe-area-inset-top)) {

@@ -137,12 +137,20 @@ export function updateCollisions(dt) {
     const id = enemies[i];
     if (!world.has(id, 'pos')) continue;
     const pos = world.get(id, 'pos');
-    clampToArena(pos);
+    const eComp = world.has(id, 'enemy') ? world.get(id, 'enemy') : null;
+    const eRadius = eComp ? eComp.radius : 4;
+    const clamped = clampToArena(pos.x, pos.y, eRadius);
+    pos.x = clamped.x;
+    pos.y = clamped.y;
   }
 
   // ── 5. Clamp player to arena bounds ───────────────────────
   if (playerId != null && world.has(playerId, 'pos')) {
     const pPos = world.get(playerId, 'pos');
-    clampToArena(pPos);
+    const pComp = world.has(playerId, 'player') ? world.get(playerId, 'player') : null;
+    const pRadius = pComp ? pComp.radius : 5;
+    const clampedP = clampToArena(pPos.x, pPos.y, pRadius);
+    pPos.x = clampedP.x;
+    pPos.y = clampedP.y;
   }
 }

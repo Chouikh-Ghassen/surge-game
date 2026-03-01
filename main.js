@@ -25,7 +25,11 @@ import { updateParticles, renderParticles, clearParticles, spawnHitSpark, spawnD
 import { initDirector, startNextWave, updateDirector, onUpgradePicked, shutdownDirector, getDirectorState } from './src/agents/director.js';
 
 // ─── UI ──────────────────────────────────────────────────────
-import { updateHud, renderHud, setHudHealth, setHudScore, setHudWave, setHudXp, incrementCombo, showFlash, resetHud } from './src/ui/hud.js';
+import { updateHud, renderHud, setHudHealth, setHudScore, setHudWave, setHudXp, setHudUpgrades, setHudDash, setHudEnemyCount, setHudLevel, incrementCombo, showFlash, resetHud } from './src/ui/hud.js';
+import { detectTouch, updateTouchControls, renderTouchControls } from './src/ui/touch-controls.js';
+
+// ─── Upgrades ────────────────────────────────────────────────
+import { UPGRADE_DEFS, resetUpgrades, rollUpgradeChoices, applyUpgrade as applyUpgradeToPlayer, getStack, getUpgradeDef, getAllStacks } from './src/game/upgrades.js';
 
 // ─── Config ──────────────────────────────────────────────────
 import { SCREEN, PLAYER, TIMING, SCORE, UPGRADES } from './src/config/balance.js';
@@ -67,105 +71,29 @@ function showScreen(id) {
   if (id) document.getElementById(id)?.classList.add('active');
 }
 
-// ─── Upgrade Definitions (Phase 1 pool) ──────────────────────
-
-const UPGRADE_POOL = [
-  {
-    id: 'spread_shot',
-    name: 'Spread Shot',
-    desc: 'Fire additional projectiles in a fan pattern.',
-    maxStack: UPGRADES.MAX_STACK,
-    apply(data, stack) { data.upgrades.spreadShot = stack; },
-  },
-  {
-    id: 'fire_rate',
-    name: 'Rapid Fire',
-    desc: 'Reduce firing interval by 20%.',
-    maxStack: UPGRADES.MAX_STACK,
-    apply(data, stack) { data.fireRate = PLAYER.FIRE_RATE * Math.pow(UPGRADES.FIRE_RATE.multiplierPerStack, stack); },
-  },
-  {
-    id: 'damage',
-    name: 'Heavy Rounds',
-    desc: 'Increase bullet damage by 25%.',
-    maxStack: UPGRADES.MAX_STACK,
-    apply(data, stack) { data.bulletDamage = PLAYER.BULLET_DAMAGE * Math.pow(UPGRADES.DAMAGE.multiplierPerStack, stack); },
-  },
-  {
-    id: 'pierce',
-    name: 'Pierce',
-    desc: 'Bullets pass through one extra enemy.',
-    maxStack: UPGRADES.MAX_STACK,
-    apply(data, stack) { data.upgrades.pierce = stack * UPGRADES.PIERCE.extraPiercePerStack; },
-  },
-  {
-    id: 'speed',
-    name: 'Swift Boots',
-    desc: 'Move 15% faster.',
-    maxStack: UPGRADES.MAX_STACK,
-    apply(data, stack) { data.speed = PLAYER.SPEED * (1 + stack * 0.15); },
-  },
-  {
-    id: 'armor',
-    name: 'Plating',
-    desc: 'Reduce incoming damage by 1.',
-    maxStack: 2,
-    apply(data, stack) { data.upgrades.armor = stack; },
-  },
-  {
-    id: 'regen',
-    name: 'Regeneration',
-    desc: 'Recover 1 HP every 8 seconds.',
-    maxStack: 2,
-    apply(data, stack) { data.upgrades.regen = stack; },
-  },
-  {
-    id: 'magnet',
-    name: 'Magnet',
-    desc: 'Increase XP pickup range.',
-    maxStack: UPGRADES.MAX_STACK,
-    apply(data, stack) { data.upgrades.magnet = stack; },
-  },
-];
-
-/** Track current upgrade stacks per run */
-let upgradeStacks = {};
-
-function resetUpgradeStacks() {
-  upgradeStacks = {};
-  for (const upg of UPGRADE_POOL) {
-    upgradeStacks[upg.id] = 0;
-  }
-}
-
-/**
- * Pick N random upgrades that haven't maxed out.
- */
-function pickUpgradeChoices(count) {
-  const available = UPGRADE_POOL.filter(u => upgradeStacks[u.id] < u.maxStack);
-  const shuffled = available.sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
+// ─── Upgrade system now imported from src/game/upgrades.js ──
 
 // ─── Upgrade UI ──────────────────────────────────────────────
 
 function showUpgradeUI(choices) {
   $upgradeChoices.innerHTML = '';
   for (const upg of choices) {
-    const stack = upgradeStacks[upg.id];
+    const stack = getStack(upg.id);
     const card = document.createElement('div');
     card.className = 'upgrade-card';
+    const categoryIcon = upg.category === 'weapon' ? '⚔' : upg.category === 'defense' ? '🛡' : '⚙';
     card.innerHTML = `
+      <div class="category">${categoryIcon} ${upg.category}</div>
       <div class="name">${upg.name}</div>
       <div class="desc">${upg.desc}</div>
       <div class="level">Lv ${stack} → ${stack + 1}</div>
     `;
     card.addEventListener('click', () => {
-      applyUpgrade(upg);
+      pickUpgrade(upg.id);
     });
     card.addEventListener('touchend', (e) => {
       e.preventDefault();
-      applyUpgrade(upg);
+      pickUpgrade(upg.id);
     });
     $upgradeChoices.appendChild(card);
   }
@@ -173,11 +101,10 @@ function showUpgradeUI(choices) {
   currentState = GAME_STATE.UPGRADE;
 }
 
-function applyUpgrade(upg) {
-  upgradeStacks[upg.id]++;
+function pickUpgrade(upgradeId) {
   const data = getPlayerData();
   if (data) {
-    upg.apply(data, upgradeStacks[upg.id]);
+    applyUpgradeToPlayer(upgradeId, data);
   }
   showScreen(null);
   currentState = GAME_STATE.PLAYING;
@@ -217,7 +144,7 @@ function startRun() {
   world.reset();
   clearParticles();
   resetHud();
-  resetUpgradeStacks();
+  resetUpgrades();
 
   score = 0;
   killCount = 0;
@@ -230,8 +157,9 @@ function startRun() {
   // Create player at center
   createPlayer();
 
-  // Init Director
-  initDirector({ mode: 'classic' });
+  // Init Director with selected mode
+  const mode = document.getElementById('sel-mode')?.value || 'classic';
+  initDirector({ mode });
 
   // Start the first wave
   startNextWave();
@@ -285,6 +213,10 @@ engine.onUpdate = (dt) => {
     return;
   }
 
+  // Update touch controls overlay
+  const playerData = getPlayerData();
+  updateTouchControls(input, playerData);
+
   // Update player
   updatePlayer(input.moveX, input.moveY, input.action, dt);
 
@@ -306,11 +238,16 @@ engine.onUpdate = (dt) => {
   // HUD updates
   updateHud(dt);
 
-  // Update player health display
-  const playerData = getPlayerData();
+  // Update player health display + HUD data
   if (playerData) {
     setHudHealth(playerData.hp, playerData.maxHp);
+    setHudDash(playerData.dashCooldownTimer > 0
+      ? 1 - playerData.dashCooldownTimer / playerData.dashCooldown
+      : 1);
+    setHudUpgrades(getAllStacks());
+    setHudLevel(level);
   }
+  setHudEnemyCount(getEnemyCount());
 
   // Regen
   if (playerData && playerData.upgrades?.regen > 0) {
@@ -342,6 +279,9 @@ engine.onRender = (alpha) => {
   // HUD on top
   renderHud(ctx);
 
+  // Touch controls overlay (on top of HUD)
+  renderTouchControls(ctx);
+
   endFrame();
 };
 
@@ -366,7 +306,7 @@ bus.on('wave:clear', (wave) => {
 });
 
 bus.on('upgrade:offered', () => {
-  const choices = pickUpgradeChoices(UPGRADES.CHOICES_PER_PICK);
+  const choices = rollUpgradeChoices(UPGRADES.CHOICES_PER_PICK);
   if (choices.length === 0) {
     // No upgrades left — skip
     onUpgradePicked();
@@ -375,15 +315,18 @@ bus.on('upgrade:offered', () => {
   showUpgradeUI(choices);
 });
 
-bus.on('enemy:death', (data) => {
+bus.on('enemy:death', (id, data) => {
   killCount++;
   incrementCombo();
-  addScore(SCORE.PER_KILL);
-  addXp(10);
+  addScore(data?.score || SCORE.PER_KILL);
+  addXp(data?.xp || 10);
 
   // Particles at death location
   if (data && data.x !== undefined) {
-    spawnDeathBurst(data.x, data.y, [getColor(6), getColor(9), getColor(15)], 12);
+    const colors = data.isBoss
+      ? [getColor(9), getColor(12), getColor(15)]
+      : [getColor(6), getColor(9), getColor(15)];
+    spawnDeathBurst(data.x, data.y, colors, data.isBoss ? 24 : 12);
   }
 });
 
@@ -431,14 +374,21 @@ document.getElementById('btn-vic-menu').addEventListener('click', () => {
   currentState = GAME_STATE.MENU;
 });
 
+// Palette selector
+const $paletteSelect = document.getElementById('sel-palette');
+$paletteSelect.addEventListener('change', () => {
+  setPalette($paletteSelect.value);
+});
+
 // ─── Init ────────────────────────────────────────────────────
 
 function init() {
   setPalette('moss');
   initRenderer(document.getElementById('game'));
   initInput(document.getElementById('game'));
+  detectTouch();
   showScreen('menu-screen');
-  console.log('%c⚡ SURGE v0.1.0 — Phase 1', 'color: #aaff44; font-weight: bold; font-size: 14px;');
+  console.log('%c⚡ SURGE v0.2.0 — Phase 2', 'color: #aaff44; font-weight: bold; font-size: 14px;');
 }
 
 init();

@@ -18,6 +18,8 @@ import world from '../core/ecs.js';
 import bus from '../core/events.js';
 import { spawnEnemy, getEnemyCount } from '../game/enemies.js';
 import { getRandomSpawnPoint, getPincerSpawnPoints, getSurroundSpawnPoints } from '../game/arena.js';
+import { CARD_DECK as FULL_DECK, CARD_MAP, getCard as getCardDef, getEligibleCards } from '../config/cards.js';
+import { pickCards, getIntensityBudget } from '../game/encounter-cards.js';
 
 // ─── Director State ──────────────────────────────────────────
 
@@ -74,222 +76,60 @@ function mulberry32(seed) {
   };
 }
 
-// ─── Encounter Card Definitions (Phase 1 — basic set) ────────
+// ─── Encounter Cards now imported from src/config/cards.js ───
+// The full ~40-card deck + encounter manager are in:
+//   src/config/cards.js       (CARD_DECK, CARD_MAP, getCard, getEligibleCards)
+//   src/game/encounter-cards.js (pickCards, getIntensityBudget, applyModifier)
 
-/**
- * @typedef {object} EncounterCard
- * @property {string} id
- * @property {string} name
- * @property {Array<{type: string, count: number}>} enemies
- * @property {string} formation - 'random' | 'pincer' | 'surround' | 'cluster'
- * @property {number} intensity - 1-10
- * @property {string[]} tags
- * @property {number} minWave
- */
-
-/** @type {EncounterCard[]} */
-const CARD_DECK = [
-  // ── Wave 1+ (easy) ──
-  {
-    id: 'drifter_trickle',
-    name: 'Drifter Trickle',
-    enemies: [{ type: 'drifter', count: 4 }],
-    formation: 'random',
-    intensity: 1,
-    tags: ['swarm', 'easy'],
-    minWave: 1,
-  },
-  {
-    id: 'drifter_pack',
-    name: 'Drifter Pack',
-    enemies: [{ type: 'drifter', count: 8 }],
-    formation: 'cluster',
-    intensity: 2,
-    tags: ['swarm'],
-    minWave: 1,
-  },
-  {
-    id: 'single_dasher',
-    name: 'Lone Dasher',
-    enemies: [{ type: 'dasher', count: 1 }],
-    formation: 'random',
-    intensity: 2,
-    tags: ['pressure', 'fast'],
-    minWave: 2,
-  },
-  // ── Wave 3+ ──
-  {
-    id: 'dasher_pair',
-    name: 'Dasher Duo',
-    enemies: [{ type: 'dasher', count: 2 }],
-    formation: 'pincer',
-    intensity: 3,
-    tags: ['pressure', 'fast', 'positional'],
-    minWave: 3,
-  },
-  {
-    id: 'drifter_swarm',
-    name: 'Drifter Swarm',
-    enemies: [{ type: 'drifter', count: 12 }],
-    formation: 'surround',
-    intensity: 3,
-    tags: ['swarm', 'overwhelming'],
-    minWave: 3,
-  },
-  {
-    id: 'sprayer_post',
-    name: 'Sprayer Turret',
-    enemies: [{ type: 'sprayer', count: 1 }],
-    formation: 'random',
-    intensity: 3,
-    tags: ['zoning', 'ranged'],
-    minWave: 3,
-  },
-  // ── Wave 5+ ──
-  {
-    id: 'mixed_assault',
-    name: 'Mixed Assault',
-    enemies: [
-      { type: 'drifter', count: 6 },
-      { type: 'dasher', count: 2 },
-    ],
-    formation: 'random',
-    intensity: 4,
-    tags: ['mixed', 'pressure'],
-    minWave: 5,
-  },
-  {
-    id: 'flanking_dashers',
-    name: 'Flanking Dashers',
-    enemies: [{ type: 'dasher', count: 4 }],
-    formation: 'pincer',
-    intensity: 5,
-    tags: ['pressure', 'fast', 'positional'],
-    minWave: 5,
-  },
-  {
-    id: 'sprayer_crossfire',
-    name: 'Sprayer Crossfire',
-    enemies: [{ type: 'sprayer', count: 2 }],
-    formation: 'pincer',
-    intensity: 5,
-    tags: ['zoning', 'ranged', 'positional'],
-    minWave: 5,
-  },
-  // ── Wave 8+ ──
-  {
-    id: 'drifter_flood',
-    name: 'Drifter Flood',
-    enemies: [{ type: 'drifter', count: 20 }],
-    formation: 'surround',
-    intensity: 5,
-    tags: ['swarm', 'overwhelming'],
-    minWave: 8,
-  },
-  {
-    id: 'dasher_squad',
-    name: 'Dasher Squad',
-    enemies: [{ type: 'dasher', count: 6 }],
-    formation: 'surround',
-    intensity: 6,
-    tags: ['pressure', 'fast'],
-    minWave: 8,
-  },
-  {
-    id: 'turret_alley',
-    name: 'Turret Alley',
-    enemies: [
-      { type: 'sprayer', count: 3 },
-      { type: 'drifter', count: 8 },
-    ],
-    formation: 'random',
-    intensity: 6,
-    tags: ['zoning', 'swarm', 'mixed'],
-    minWave: 8,
-  },
-  // ── Wave 10+ (Boss waves) ──
-  {
-    id: 'boss_drifter_king',
-    name: 'The Drifter King',
-    enemies: [
-      { type: 'drifter', count: 1, elite: false, boss: true },
-      { type: 'drifter', count: 8 },
-    ],
-    formation: 'surround',
-    intensity: 8,
-    tags: ['boss', 'swarm'],
-    minWave: 10,
-  },
-  // ── Wave 15+ ──
-  {
-    id: 'hell_wave',
-    name: 'Hell Wave',
-    enemies: [
-      { type: 'drifter', count: 15 },
-      { type: 'dasher', count: 4 },
-      { type: 'sprayer', count: 2 },
-    ],
-    formation: 'surround',
-    intensity: 8,
-    tags: ['overwhelming', 'mixed'],
-    minWave: 15,
-  },
-];
-
-// ─── Classic Mode Wave Sequence ──────────────────────────────
+// ─── Classic Mode Wave Sequence (Expanded for Phase 2) ──────
 
 /**
  * Pre-authored wave→cards mapping for Classic mode.
  * Provides a curated experience without AI.
+ * Uses the full card deck including Orbitor, Splitter, Shielder.
  */
 const CLASSIC_SEQUENCE = {
   1:  ['drifter_trickle'],
   2:  ['drifter_pack'],
   3:  ['single_dasher', 'drifter_trickle'],
-  4:  ['dasher_pair'],
+  4:  ['dasher_pair', 'drifter_line'],
   5:  ['sprayer_post', 'drifter_pack'],
-  6:  ['mixed_assault'],
-  7:  ['flanking_dashers'],
-  8:  ['drifter_swarm', 'single_dasher'],
-  9:  ['sprayer_crossfire', 'drifter_pack'],
-  10: ['boss_drifter_king'],
-  11: ['turret_alley'],
-  12: ['dasher_squad'],
-  13: ['mixed_assault', 'sprayer_post'],
-  14: ['drifter_flood'],
-  15: ['hell_wave'],
+  6:  ['orbitor_ring', 'drifter_trickle'],
+  7:  ['flanking_dashers', 'splitter_pair'],
+  8:  ['drifter_swarm', 'shielded_pack'],
+  9:  ['sprayer_crossfire', 'orbitor_ring'],
+  10: ['boss_swarm_king'],
+  11: ['turret_alley', 'splitter_chain'],
+  12: ['dasher_squad', 'orbitor_cage'],
+  13: ['mixed_assault', 'shield_wall'],
+  14: ['drifter_flood', 'splitter_pair'],
+  15: ['hell_wave', 'orbitor_constellation'],
   16: ['flanking_dashers', 'sprayer_crossfire'],
-  17: ['dasher_squad', 'drifter_swarm'],
-  18: ['turret_alley', 'dasher_pair'],
-  19: ['hell_wave', 'single_dasher'],
-  20: ['boss_drifter_king'], // Second boss (harder due to player build)
+  17: ['dasher_squad', 'splitter_wave'],
+  18: ['elite_orbitor', 'drifter_swarm'],
+  19: ['shielded_crossfire', 'mixed_assault'],
+  20: ['boss_blitz_captain'],
   21: ['drifter_flood', 'sprayer_crossfire'],
-  22: ['hell_wave', 'dasher_pair'],
+  22: ['hell_wave', 'orbital_assault'],
   23: ['turret_alley', 'flanking_dashers'],
-  24: ['drifter_flood', 'dasher_squad'],
-  25: ['hell_wave', 'sprayer_crossfire'],
+  24: ['splitter_rush', 'shielded_crossfire'],
+  25: ['fortress', 'hell_wave'],
   26: ['dasher_squad', 'drifter_flood'],
-  27: ['hell_wave', 'turret_alley'],
-  28: ['hell_wave', 'flanking_dashers'],
+  27: ['chaos', 'turret_alley'],
+  28: ['apocalypse', 'shield_wall'],
   29: ['hell_wave', 'dasher_squad'],
-  30: ['boss_drifter_king'], // Final boss
+  30: ['boss_hivemind'],
 };
 
-// ─── Card Lookup ─────────────────────────────────────────────
-
-/** @type {Map<string, EncounterCard>} */
-const cardMap = new Map();
-for (const card of CARD_DECK) {
-  cardMap.set(card.id, card);
-}
+// Card lookup now via CARD_MAP from src/config/cards.js
 
 /**
- * Get a card by ID.
+ * Get a card by ID (re-exported for backwards compat).
  * @param {string} id
  * @returns {EncounterCard|undefined}
  */
 export function getCard(id) {
-  return cardMap.get(id);
+  return CARD_MAP.get(id);
 }
 
 // ─── Director Public API ─────────────────────────────────────
@@ -351,7 +191,7 @@ export function startNextWave() {
 
   // Build spawn queue from cards
   for (const cardId of cardIds) {
-    const card = cardMap.get(cardId);
+    const card = CARD_MAP.get(cardId);
     if (!card) continue;
     _enqueueCard(card);
   }
@@ -437,7 +277,7 @@ export function shutdownDirector() {
 
 /**
  * Classic mode: look up pre-authored card sequence.
- * Falls back to cycling high-intensity cards.
+ * Falls back to budget-based picking from the full deck via encounter-cards.js
  * @param {number} wave
  * @returns {string[]}
  */
@@ -445,15 +285,8 @@ function _classicPick(wave) {
   if (CLASSIC_SEQUENCE[wave]) {
     return CLASSIC_SEQUENCE[wave];
   }
-  // Beyond wave 30 — cycle hard encounters
-  const hardCards = CARD_DECK.filter(c => c.intensity >= 6);
-  const rng = state._rng;
-  const count = 2;
-  const result = [];
-  for (let i = 0; i < count; i++) {
-    result.push(hardCards[(rng() * hardCards.length) | 0].id);
-  }
-  return result;
+  // Beyond wave 30 — use the encounter-cards budget system
+  return pickCards(wave, 'classic', getIntensityBudget(wave), state._rng);
 }
 
 /**
@@ -487,6 +320,18 @@ function _getFormationPositions(formation, count) {
       return getPincerSpawnPoints(count);
     case 'surround':
       return getSurroundSpawnPoints(count);
+    case 'line': {
+      const origin = getRandomSpawnPoint();
+      const points = [];
+      const step = 16; // pixels between each enemy in the line
+      for (let i = 0; i < count; i++) {
+        points.push({
+          x: origin.x + (i - (count - 1) / 2) * step,
+          y: origin.y,
+        });
+      }
+      return points;
+    }
     case 'cluster': {
       const origin = getRandomSpawnPoint();
       const points = [];
@@ -545,8 +390,8 @@ function _onWaveClear() {
 
 // ─── Exports ─────────────────────────────────────────────────
 
-export { state as directorState, CARD_DECK };
+export { state as directorState, FULL_DECK as CARD_DECK };
 export default {
   initDirector, startNextWave, updateDirector, onUpgradePicked,
-  getDirectorState, shutdownDirector, getCard, CARD_DECK,
+  getDirectorState, shutdownDirector, getCard, CARD_DECK: FULL_DECK,
 };

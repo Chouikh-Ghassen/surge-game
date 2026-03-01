@@ -34,9 +34,13 @@ import { ENEMIES } from '../config/balance.js';
  * @type {Record<string, Function>}
  */
 const BEHAVIORS = {
-  drifter: updateDrifter,
-  dasher:  updateDasher,
-  sprayer: updateSprayer,
+  drifter:       updateDrifter,
+  dasher:        updateDasher,
+  sprayer:       updateSprayer,
+  orbitor:       updateOrbitor,
+  splitter:      updateSplitter,
+  splitter_child:updateSplitterChild,
+  shielder:      updateShielder,
 };
 
 /**
@@ -318,6 +322,221 @@ function _sprayerFire(pos, bp) {
   }
 }
 
+// ─── Orbitor AI ─────────────────────────────────────────────
+
+/**
+ * Orbitor: circles the player at a fixed radius and fires inward.
+ *
+ * Behavior:
+ *   1. Maintain orbit at ~orbitRadius px from the player.
+ *   2. Slowly rotate orbitAngle over time.
+ *   3. Move toward the desired orbit position each tick.
+ *   4. Every fireRate seconds, fire a single bullet toward the player.
+ *
+ * @param {number} id
+ * @param {Object} pos
+ * @param {Object} vel
+ * @param {Object} enemy
+ * @param {number} dt
+ * @param {Object} playerPos
+ */
+function updateOrbitor(id, pos, vel, enemy, dt, playerPos) {
+  const bp = enemy.behaviorParams;
+
+  // Advance orbit angle
+  bp.orbitAngle += bp.orbitSpeed * dt;
+
+  // Desired position on orbit circle around player
+  const targetX = playerPos.x + Math.cos(bp.orbitAngle) * bp.orbitRadius;
+  const targetY = playerPos.y + Math.sin(bp.orbitAngle) * bp.orbitRadius;
+
+  // Move toward desired orbit position
+  const dx = targetX - pos.x;
+  const dy = targetY - pos.y;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+  // Use higher speed to keep up when far from orbit position
+  const moveSpeed = Math.min(enemy.speed * 3, dist / dt);
+  vel.x = (dx / dist) * moveSpeed;
+  vel.y = (dy / dist) * moveSpeed;
+  pos.x += vel.x * dt;
+  pos.y += vel.y * dt;
+
+  // ── Fire toward player ──
+  bp.fireTimer -= dt;
+  if (bp.fireTimer <= 0) {
+    bp.fireTimer = bp.fireRate;
+    const adx = playerPos.x - pos.x;
+    const ady = playerPos.y - pos.y;
+    const adist = Math.sqrt(adx * adx + ady * ady) || 1;
+    const bvx = (adx / adist) * bp.bulletSpeed;
+    const bvy = (ady / adist) * bp.bulletSpeed;
+    spawnEnemyBullet(pos.x, pos.y, bvx, bvy, 1, 2);
+  }
+}
+
+// ─── Splitter AI ────────────────────────────────────────────
+
+/**
+ * Splitter: slow homing toward the player.
+ * Relies on contact damage. On death the enemy system handles spawning children.
+ *
+ * @param {number} id
+ * @param {Object} pos
+ * @param {Object} vel
+ * @param {Object} enemy
+ * @param {number} dt
+ * @param {Object} playerPos
+ */
+function updateSplitter(id, pos, vel, enemy, dt, playerPos) {
+  const dx = playerPos.x - pos.x;
+  const dy = playerPos.y - pos.y;
+  const dir = normalize(dx, dy);
+
+  vel.x = dir.x * enemy.speed;
+  vel.y = dir.y * enemy.speed;
+  pos.x += vel.x * dt;
+  pos.y += vel.y * dt;
+}
+
+/**
+ * Splitter child: faster homing toward the player.
+ * Same simple behavior as the parent but quicker.
+ */
+function updateSplitterChild(id, pos, vel, enemy, dt, playerPos) {
+  const dx = playerPos.x - pos.x;
+  const dy = playerPos.y - pos.y;
+  const dir = normalize(dx, dy);
+
+  vel.x = dir.x * enemy.speed;
+  vel.y = dir.y * enemy.speed;
+  pos.x += vel.x * dt;
+  pos.y += vel.y * dt;
+}
+
+// ─── Shielder AI ────────────────────────────────────────────
+
+/**
+ * Shielder: escorts the nearest non-shielder enemy, staying behind it
+ * relative to the player. Projects a damage-reduction aura.
+ *
+ * Behavior:
+ *   1. Find nearest alive non-shielder enemy.
+ *   2. Position itself behind that ally (offset away from player).
+ *   3. If escort dies, find a new one next tick.
+ *
+ * The shield aura damage reduction is applied in the collision/damage
+ * system by checking proximity to living shielders (see damageEnemy).
+ *
+ * @param {number} id
+ * @param {Object} pos
+ * @param {Object} vel
+ * @param {Object} enemy
+ * @param {number} dt
+ * @param {Object} playerPos
+ */
+function updateShielder(id, pos, vel, enemy, dt, playerPos) {
+  const bp = enemy.behaviorParams;
+
+  // ── Find or validate escort target ──
+  let escortValid = bp.escortTarget >= 0 && world.alive(bp.escortTarget);
+  if (escortValid) {
+    const escortEnemy = world.get(bp.escortTarget, 'enemy');
+    if (!escortEnemy || escortEnemy.type === 'shielder') escortValid = false;
+  }
+
+  if (!escortValid) {
+    bp.escortTarget = _findNearestNonShielder(id, pos);
+  }
+
+  // ── Move toward escort (or fall back to player homing) ──
+  if (bp.escortTarget >= 0 && world.alive(bp.escortTarget)) {
+    const allyPos = world.get(bp.escortTarget, 'pos');
+
+    // Offset: place shielder behind ally, away from player
+    const adx = allyPos.x - playerPos.x;
+    const ady = allyPos.y - playerPos.y;
+    const adist = Math.sqrt(adx * adx + ady * ady) || 1;
+    const offsetDist = 12;
+    const targetX = allyPos.x + (adx / adist) * offsetDist;
+    const targetY = allyPos.y + (ady / adist) * offsetDist;
+
+    const dx = targetX - pos.x;
+    const dy = targetY - pos.y;
+    const dir = normalize(dx, dy);
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    const moveSpeed = Math.min(enemy.speed * 2, dist / dt);
+    vel.x = dir.x * moveSpeed;
+    vel.y = dir.y * moveSpeed;
+  } else {
+    // No ally to escort — fall back to slow homing toward player
+    const dx = playerPos.x - pos.x;
+    const dy = playerPos.y - pos.y;
+    const dir = normalize(dx, dy);
+    vel.x = dir.x * enemy.speed;
+    vel.y = dir.y * enemy.speed;
+  }
+
+  pos.x += vel.x * dt;
+  pos.y += vel.y * dt;
+}
+
+/**
+ * Find the nearest living non-shielder enemy to the given position.
+ * @private
+ * @param {number} selfId - The shielder's own entity ID (to exclude)
+ * @param {Object} pos    - The shielder's position
+ * @returns {number} Entity ID of nearest ally, or -1
+ */
+function _findNearestNonShielder(selfId, pos) {
+  const ids = world.query('pos', 'enemy');
+  let bestId = -1;
+  let bestDist = Infinity;
+
+  for (const eid of ids) {
+    if (eid === selfId) continue;
+    const e = world.get(eid, 'enemy');
+    if (!e || e.type === 'shielder') continue;
+    const epos = world.get(eid, 'pos');
+    const dx = epos.x - pos.x;
+    const dy = epos.y - pos.y;
+    const d = dx * dx + dy * dy;
+    if (d < bestDist) {
+      bestDist = d;
+      bestId = eid;
+    }
+  }
+
+  return bestId;
+}
+
+// ─── Shield Aura Query ──────────────────────────────────────
+
+/**
+ * Check whether the given position is within any living shielder's aura.
+ * Returns the damage multiplier (1.0 = no shield, 0.5 = shielded).
+ * Intended to be called from the damage/collision system.
+ *
+ * @param {number} x
+ * @param {number} y
+ * @returns {number} Damage multiplier (0..1)
+ */
+export function getShieldAuraMultiplier(x, y) {
+  const ids = world.query('pos', 'enemy');
+  for (const id of ids) {
+    const e = world.get(id, 'enemy');
+    if (!e || e.type !== 'shielder') continue;
+    const sp = world.get(id, 'pos');
+    const dx = sp.x - x;
+    const dy = sp.y - y;
+    if (dx * dx + dy * dy <= e.behaviorParams.shieldRadius * e.behaviorParams.shieldRadius) {
+      return e.behaviorParams.shieldDamageReduction; // 0.5
+    }
+  }
+  return 1.0;
+}
+
 // ─── Default Export ─────────────────────────────────────────
 
-export default { updateEnemyBrains };
+export default { updateEnemyBrains, getShieldAuraMultiplier };
