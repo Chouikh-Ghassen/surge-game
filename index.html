@@ -15,6 +15,17 @@
   <!-- ─── Game Canvas ─────────────────────────────────────── -->
   <canvas id="game"></canvas>
 
+  <!-- ─── LLM Decision Panel (outside game, in black letterbox) ─── -->
+  <div id="llm-panel" class="llm-panel" hidden>
+    <div class="llm-panel-header">AI DIRECTOR</div>
+    <div class="llm-panel-body">
+      <div class="llm-field"><span class="llm-label">Mode</span><span id="llm-mode" class="llm-value">—</span></div>
+      <div class="llm-field"><span class="llm-label">Cards</span><span id="llm-cards" class="llm-value">—</span></div>
+      <div class="llm-field"><span class="llm-label">Rationale</span><span id="llm-rationale" class="llm-value">—</span></div>
+      <div class="llm-field"><span class="llm-label">Tip</span><span id="llm-tip" class="llm-value">—</span></div>
+    </div>
+  </div>
+
   <!-- ─── UI Overlays (hidden by default, toggled by JS) ── -->
   <div id="ui-layer">
     <!-- Title Screen -->

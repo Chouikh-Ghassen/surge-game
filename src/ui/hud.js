@@ -221,92 +221,129 @@ export function renderHud(ctx) {
   const W = SCREEN.WIDTH;
   const H = SCREEN.HEIGHT;
 
-  // ── Health bar (top-left) ──
-  _drawHealthBar(ctx, 4, 4, 80, 6);
+  // ── Health bar (top-left) with label ──
+  _drawLabel(ctx, 4, 3, 'HP');
+  _drawHealthBar(ctx, 18, 4, 70, 8);
 
   // ── Wave counter (top-center) ──
-  ctx.fillStyle = getColor(15); // white
-  ctx.font = '7px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText(`WAVE ${hud.wave}`, W / 2, 10);
+  _drawOutlinedText(ctx, `WAVE ${hud.wave}`, W / 2, 11, {
+    font: 'bold 8px monospace', color: 15, align: 'center',
+  });
 
   // ── Score (top-right) ──
-  ctx.textAlign = 'right';
-  ctx.fillText(`${hud.score}`, W - 4, 10);
+  _drawLabel(ctx, W - 52, 3, 'SCORE');
+  _drawOutlinedText(ctx, `${hud.score}`, W - 4, 11, {
+    font: 'bold 8px monospace', color: 15, align: 'right',
+  });
 
   // ── Level indicator (below wave) ──
-  ctx.fillStyle = getColor(12);
-  ctx.font = '5px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText(`LV ${hud.level}`, W / 2, 17);
+  _drawOutlinedText(ctx, `LEVEL ${hud.level}`, W / 2, 20, {
+    font: 'bold 6px monospace', color: 12, align: 'center',
+  });
 
   // ── Combo counter (left under health) ──
   if (hud.comboCount > 1) {
     const alpha = Math.min(1, hud.comboTimer);
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = getColor(9); // yellow
-    ctx.textAlign = 'left';
-    ctx.font = 'bold 8px monospace';
-    ctx.fillText(`${hud.comboCount}x COMBO`, 4, 20);
+    _drawOutlinedText(ctx, `${hud.comboCount}x COMBO`, 4, 22, {
+      font: 'bold 8px monospace', color: 9, align: 'left',
+    });
     ctx.globalAlpha = 1;
   }
 
   // ── Enemy count (top-right, under score) ──
   if (hud.enemyCount > 0) {
-    ctx.fillStyle = getColor(6); // red-ish
-    ctx.font = '5px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText(`×${hud.enemyCount}`, W - 4, 17);
+    _drawOutlinedText(ctx, `ENEMIES: ${hud.enemyCount}`, W - 4, 20, {
+      font: 'bold 6px monospace', color: 6, align: 'right',
+    });
   }
 
   // ── Dash Cooldown indicator (left side, below combo) ──
-  _drawDashIndicator(ctx, 4, 25);
+  _drawDashIndicator(ctx, 4, 27);
 
   // ── Upgrade Icons (bottom-left, above XP) ──
-  _drawUpgradeIcons(ctx, 4, H - 16);
+  _drawUpgradeIcons(ctx, 4, H - 20);
 
-  // ── XP bar (bottom) ──
-  _drawXpBar(ctx, 20, H - 8, W - 40, 3);
+  // ── XP bar (bottom) with label ──
+  _drawLabel(ctx, 4, H - 8, 'XP');
+  _drawXpBar(ctx, 18, H - 8, W - 22, 5);
 
   // ── Flash message (centered) ──
   if (hud.flash) {
     const alpha = Math.min(1, hud.flashTimer * 2);
     ctx.globalAlpha = alpha;
-    ctx.font = 'bold 14px monospace';
-    ctx.textAlign = 'center';
-    // Text shadow/outline for readability
-    ctx.fillStyle = getColor(0);
-    ctx.fillText(hud.flash, W / 2 + 1, H / 3 + 1);
-    ctx.fillStyle = getColor(15); // white
-    ctx.shadowColor = getColor(0);
-    ctx.shadowBlur = 4;
-    ctx.fillText(hud.flash, W / 2, H / 3);
-    ctx.shadowBlur = 0;
+    _drawOutlinedText(ctx, hud.flash, W / 2, H / 3, {
+      font: 'bold 14px monospace', color: 15, align: 'center', shadow: 6,
+    });
     ctx.globalAlpha = 1;
   }
 
   // ── Kill feed (right side) ──
-  ctx.textAlign = 'right';
-  ctx.font = '5px monospace';
   for (let i = 0; i < hud.killFeed.length; i++) {
     const entry = hud.killFeed[i];
     const alpha = Math.min(1, entry.timer * 2);
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = getColor(10); // green-ish
-    ctx.fillText(entry.text, W - 4, 24 + i * 7);
+    _drawOutlinedText(ctx, entry.text, W - 4, 28 + i * 8, {
+      font: 'bold 6px monospace', color: 10, align: 'right',
+    });
   }
   ctx.globalAlpha = 1;
-
-  // ── LLM Director Overlay (bottom-right, above XP bar) ──
-  if (hud.llmOverlay.visible && hud.llmOverlay.mode) {
-    _drawLlmOverlay(ctx, W, H);
-  }
 
   // Reset text alignment
   ctx.textAlign = 'left';
 }
 
 // ─── Private drawing helpers ─────────────────────────────────
+
+/**
+ * Draw outlined text for maximum readability on any background.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {string} text
+ * @param {number} x
+ * @param {number} y
+ * @param {{ font?: string, color?: number, align?: string, shadow?: number }} opts
+ */
+function _drawOutlinedText(ctx, text, x, y, opts = {}) {
+  const font = opts.font || 'bold 7px monospace';
+  const color = opts.color ?? 15;
+  const align = opts.align || 'left';
+  const shadowBlur = opts.shadow ?? 3;
+
+  ctx.font = font;
+  ctx.textAlign = align;
+
+  // Dark outline (4-direction offset)
+  ctx.fillStyle = getColor(0);
+  ctx.fillText(text, x - 1, y);
+  ctx.fillText(text, x + 1, y);
+  ctx.fillText(text, x, y - 1);
+  ctx.fillText(text, x, y + 1);
+
+  // Main text with optional glow
+  if (shadowBlur > 0) {
+    ctx.shadowColor = getColor(0);
+    ctx.shadowBlur = shadowBlur;
+  }
+  ctx.fillStyle = getColor(color);
+  ctx.fillText(text, x, y);
+  ctx.shadowBlur = 0;
+}
+
+/**
+ * Draw a small label tag (e.g. "HP", "XP", "SCORE").
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x
+ * @param {number} y
+ * @param {string} label
+ */
+function _drawLabel(ctx, x, y, label) {
+  ctx.font = 'bold 5px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = getColor(0);
+  ctx.fillText(label, x + 1, y + 6);
+  ctx.fillStyle = getColor(12); // accent
+  ctx.fillText(label, x, y + 5);
+}
 
 /**
  * @param {CanvasRenderingContext2D} ctx
@@ -353,12 +390,10 @@ function _drawHealthBar(ctx, x, y, w, h) {
   ctx.lineWidth = 0.5;
   ctx.strokeRect(x, y, w, h);
 
-  // HP text
-  ctx.fillStyle = getColor(15);
-  ctx.font = '5px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText(`${hud.hp}/${hud.maxHp}`, x + w / 2, y + h - 0.5);
-  ctx.textAlign = 'left';
+  // HP text (centered inside bar, with outline)
+  _drawOutlinedText(ctx, `${hud.hp} / ${hud.maxHp}`, x + w / 2, y + h - 1, {
+    font: 'bold 6px monospace', color: 15, align: 'center', shadow: 0,
+  });
 }
 
 /**
@@ -389,6 +424,12 @@ function _drawXpBar(ctx, x, y, w, h) {
   ctx.strokeStyle = getColor(3);
   ctx.lineWidth = 0.5;
   ctx.strokeRect(x, y, w, h);
+
+  // XP text (centered inside bar)
+  const pct = Math.floor(ratio * 100);
+  _drawOutlinedText(ctx, `${hud.xp}/${hud.xpToNext} (${pct}%)`, x + w / 2, y + h - 0.5, {
+    font: 'bold 4px monospace', color: 15, align: 'center', shadow: 0,
+  });
 }
 
 /**
@@ -398,14 +439,14 @@ function _drawXpBar(ctx, x, y, w, h) {
  * @param {number} y
  */
 function _drawDashIndicator(ctx, x, y) {
-  const r = 4;
+  const r = 6;
   const cx = x + r;
   const cy = y + r;
 
   // Background arc
-  ctx.globalAlpha = 0.3;
+  ctx.globalAlpha = 0.4;
   ctx.strokeStyle = getColor(3);
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.stroke();
@@ -413,26 +454,27 @@ function _drawDashIndicator(ctx, x, y) {
   // Fill arc
   if (hud.dashReady >= 1) {
     // Ready — pulse green
-    const pulse = 0.5 + Math.sin(Date.now() * 0.008) * 0.3;
+    const pulse = 0.6 + Math.sin(Date.now() * 0.008) * 0.3;
     ctx.globalAlpha = pulse;
     ctx.strokeStyle = getColor(10);
   } else {
-    ctx.globalAlpha = 0.8;
+    ctx.globalAlpha = 0.9;
     ctx.strokeStyle = getColor(9);
   }
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + hud.dashReady * Math.PI * 2);
   ctx.stroke();
-
-  // Label
-  ctx.globalAlpha = 0.6;
-  ctx.fillStyle = getColor(15);
-  ctx.font = '3px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('DSH', cx, cy + 1.5);
-  ctx.textAlign = 'left';
   ctx.globalAlpha = 1;
+
+  // "DASH" label next to the indicator
+  const readyText = hud.dashReady >= 1 ? 'DASH ✓' : 'DASH';
+  _drawOutlinedText(ctx, readyText, cx + r + 3, cy + 2, {
+    font: 'bold 5px monospace',
+    color: hud.dashReady >= 1 ? 10 : 9,
+    align: 'left',
+    shadow: 0,
+  });
 }
 
 /**
@@ -442,119 +484,53 @@ function _drawDashIndicator(ctx, x, y) {
  * @param {number} y
  */
 function _drawUpgradeIcons(ctx, x, y) {
-  const ICON_CHARS = {
-    spread_shot: 'S', pierce: 'P', fire_rate: 'F', damage: 'D',
-    homing: 'H', ricochet: 'R', shield: '■', dash_cd: '»',
-    slow_aura: '~', regen: '+', armor: 'A',
-    magnet: 'M', nuke: '★', decoy: '△', scanner: '◎',
+  // Short readable names for each upgrade
+  const ICON_LABELS = {
+    spread_shot: 'SPRD', pierce: 'PRC', fire_rate: 'RATE', damage: 'DMG',
+    homing: 'HOME', ricochet: 'RICO', shield: 'SHLD', dash_cd: 'DASH+',
+    slow_aura: 'SLOW', regen: 'REGEN', armor: 'ARMR',
+    magnet: 'MAG', nuke: 'NUKE', decoy: 'DECY', scanner: 'SCAN',
   };
 
   const active = Object.entries(hud.upgrades).filter(([, v]) => v > 0);
   if (active.length === 0) return;
 
+  // Row label
+  _drawLabel(ctx, x, y - 8, 'UPGRADES');
+
   let ox = x;
-  ctx.font = '5px monospace';
 
   for (const [id, stack] of active) {
-    const ch = ICON_CHARS[id] || '?';
+    const label = ICON_LABELS[id] || id.slice(0, 4).toUpperCase();
+    const tagW = Math.max(16, label.length * 4 + 6);
 
-    // Icon background
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = getColor(2);
-    ctx.fillRect(ox, y, 8, 7);
+    // Tag background
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = getColor(1);
+    ctx.fillRect(ox, y, tagW, 9);
+    ctx.strokeStyle = getColor(3);
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(ox, y, tagW, 9);
+    ctx.globalAlpha = 1;
 
-    // Icon character
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = getColor(10);
-    ctx.textAlign = 'center';
-    ctx.fillText(ch, ox + 4, y + 5.5);
+    // Label text
+    _drawOutlinedText(ctx, stack > 1 ? `${label}×${stack}` : label, ox + tagW / 2, y + 7, {
+      font: 'bold 5px monospace', color: 10, align: 'center', shadow: 0,
+    });
 
-    // Stack count (bottom-right)
-    if (stack > 1) {
-      ctx.fillStyle = getColor(9);
-      ctx.font = '3px monospace';
-      ctx.textAlign = 'right';
-      ctx.fillText(`${stack}`, ox + 8, y + 7);
-      ctx.font = '5px monospace';
-    }
-
-    ox += 9;
-    if (ox > SCREEN.WIDTH - 30) break; // Don't overflow
+    ox += tagW + 2;
+    if (ox > SCREEN.WIDTH - 20) break;
   }
 
-  ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
 
 /**
- * Draw the LLM Director overlay — compact info panel bottom-right.
- * Shows: mode badge, current cards, rationale (truncated).
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} W
- * @param {number} H
+ * Get the current LLM overlay data for external DOM rendering.
+ * @returns {{ visible: boolean, mode: string, cards: string[], rationale: string, tip: string }}
  */
-function _drawLlmOverlay(ctx, W, H) {
-  const ov = hud.llmOverlay;
-  const pad = 3;
-  const lineH = 7;
-  const maxW = 100;
-  const x = W - maxW - 2;
-  const baseY = H - 50; // Above XP bar and upgrade icons
-
-  // Build text lines
-  const lines = [];
-  const modeLabel = ov.mode === 'llm' ? 'LLM' : ov.mode === 'adaptive' ? 'ADPT' : 'CLSC';
-  lines.push({ text: `⚡ ${modeLabel}`, color: 12 }); // cyan
-
-  if (ov.cards.length > 0) {
-    // Show card picks abbreviated (max 3, truncated names)
-    const cardStr = ov.cards.slice(0, 3).map(c => {
-      // Shorten card IDs: 'drifter_pack' → 'drifter'
-      const short = c.split('_')[0];
-      return short.length > 7 ? short.slice(0, 6) + '…' : short;
-    }).join(', ');
-    lines.push({ text: `» ${cardStr}`, color: 9 }); // yellow
-  }
-
-  if (ov.rationale) {
-    // Strip [LLM] prefix and truncate
-    let r = ov.rationale.replace(/^\[LLM[^\]]*\]\s*/i, '');
-    if (r.length > 28) r = r.slice(0, 26) + '…';
-    lines.push({ text: r, color: 15 }); // white
-  }
-
-  if (ov.tip) {
-    let t = ov.tip;
-    if (t.length > 28) t = t.slice(0, 26) + '…';
-    lines.push({ text: `💡 ${t}`, color: 10 }); // green
-  }
-
-  if (lines.length <= 1) return; // Nothing interesting to show
-
-  const boxH = lines.length * lineH + pad * 2;
-  const boxY = baseY - boxH;
-
-  // Semi-transparent background
-  ctx.globalAlpha = 0.35;
-  ctx.fillStyle = getColor(0);
-  ctx.fillRect(x, boxY, maxW + pad, boxH);
-  ctx.globalAlpha = 0.2;
-  ctx.strokeStyle = getColor(3);
-  ctx.lineWidth = 0.5;
-  ctx.strokeRect(x, boxY, maxW + pad, boxH);
-
-  // Draw text lines
-  ctx.globalAlpha = 0.7;
-  ctx.font = '4px monospace';
-  ctx.textAlign = 'left';
-
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillStyle = getColor(lines[i].color);
-    ctx.fillText(lines[i].text, x + pad, boxY + pad + (i + 1) * lineH - 2);
-  }
-
-  ctx.globalAlpha = 1;
-  ctx.textAlign = 'left';
+export function getLlmOverlayData() {
+  return { ...hud.llmOverlay };
 }
 
 export { hud };

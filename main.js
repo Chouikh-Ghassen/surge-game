@@ -35,7 +35,7 @@ import { generateCoachReport } from './src/agents/coach.js';
 import { showReportScreen } from './src/ui/report-screen.js';
 
 // ─── UI ──────────────────────────────────────────────────────
-import { updateHud, renderHud, setHudHealth, setHudScore, setHudWave, setHudXp, setHudUpgrades, setHudDash, setHudEnemyCount, setHudLevel, incrementCombo, showFlash, resetHud, setLlmOverlay, setLlmOverlayVisible, isLlmOverlayVisible } from './src/ui/hud.js';
+import { updateHud, renderHud, setHudHealth, setHudScore, setHudWave, setHudXp, setHudUpgrades, setHudDash, setHudEnemyCount, setHudLevel, incrementCombo, showFlash, resetHud, setLlmOverlay, setLlmOverlayVisible, isLlmOverlayVisible, getLlmOverlayData } from './src/ui/hud.js';
 import { detectTouch, updateTouchControls, renderTouchControls } from './src/ui/touch-controls.js';
 
 // ─── Upgrades ────────────────────────────────────────────────
@@ -515,6 +515,9 @@ engine.onRender = (alpha) => {
   renderCRT();
 
   endFrame();
+
+  // Update DOM-based LLM panel (outside canvas)
+  _updateLlmPanel();
 };
 
 // ─── Bus Event Wiring ────────────────────────────────────────
@@ -944,6 +947,98 @@ $paletteSelect.addEventListener('change', () => {
   setPalette($paletteSelect.value);
 });
 
+// ─── LLM Panel (DOM-based, outside canvas) ───────────────────
+
+const $llmPanel = document.getElementById('llm-panel');
+const $llmMode = document.getElementById('llm-mode');
+const $llmCards = document.getElementById('llm-cards');
+const $llmRationale = document.getElementById('llm-rationale');
+const $llmTip = document.getElementById('llm-tip');
+let _lastLlmHash = '';
+
+/**
+ * Position the LLM panel to the right of the canvas in the black letterbox.
+ * Falls back to right edge if not enough space.
+ */
+function _positionLlmPanel() {
+  if (!$llmPanel) return;
+  const $canvas = document.getElementById('game');
+  if (!$canvas) return;
+
+  const rect = $canvas.getBoundingClientRect();
+  const spaceRight = window.innerWidth - rect.right;
+  const spaceLeft = rect.left;
+
+  if (spaceRight > 180) {
+    // Place to the right of canvas
+    $llmPanel.style.left = `${rect.right + 8}px`;
+    $llmPanel.style.right = 'auto';
+    $llmPanel.style.top = `${rect.top + 20}px`;
+    $llmPanel.style.transform = 'none';
+  } else if (spaceLeft > 180) {
+    // Place to the left of canvas
+    $llmPanel.style.left = `${rect.left - 228}px`;
+    $llmPanel.style.right = 'auto';
+    $llmPanel.style.top = `${rect.top + 20}px`;
+    $llmPanel.style.transform = 'none';
+  } else {
+    // Not enough space on sides — hide panel (mobile)
+    $llmPanel.hidden = true;
+  }
+}
+
+/**
+ * Update the DOM-based LLM panel with current overlay data.
+ */
+function _updateLlmPanel() {
+  if (!$llmPanel) return;
+
+  const ov = getLlmOverlayData();
+
+  // Hide if overlay not visible or no mode
+  if (!ov.visible || !ov.mode) {
+    $llmPanel.hidden = true;
+    return;
+  }
+
+  // Quick hash to avoid unnecessary DOM writes
+  const hash = `${ov.mode}|${ov.cards.join(',')}|${ov.rationale}|${ov.tip}`;
+  if (hash === _lastLlmHash && !$llmPanel.hidden) return;
+  _lastLlmHash = hash;
+
+  // Show panel
+  $llmPanel.hidden = false;
+
+  // Mode
+  const modeLabel = ov.mode === 'llm' ? 'LLM Director' : ov.mode === 'adaptive' ? 'Adaptive' : 'Classic';
+  $llmMode.textContent = modeLabel;
+  $llmMode.className = 'llm-value mode-badge';
+
+  // Cards
+  if (ov.cards.length > 0) {
+    $llmCards.textContent = ov.cards.slice(0, 5).join(', ');
+  } else {
+    $llmCards.textContent = '—';
+  }
+
+  // Rationale
+  if (ov.rationale) {
+    let r = ov.rationale.replace(/^\[LLM[^\]]*\]\s*/i, '');
+    $llmRationale.textContent = r;
+  } else {
+    $llmRationale.textContent = '—';
+  }
+
+  // Tip
+  if (ov.tip) {
+    $llmTip.textContent = ov.tip;
+    $llmTip.className = 'llm-value tip-text';
+  } else {
+    $llmTip.textContent = '—';
+    $llmTip.className = 'llm-value';
+  }
+}
+
 // ─── Init ────────────────────────────────────────────────────
 
 function init() {
@@ -952,7 +1047,8 @@ function init() {
   initInput(document.getElementById('game'));
   detectTouch();
   resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
+  _positionLlmPanel();
+  window.addEventListener('resize', () => { resizeCanvas(); _positionLlmPanel(); });
 
   // Phase 4: Audio system
   initAudio();
