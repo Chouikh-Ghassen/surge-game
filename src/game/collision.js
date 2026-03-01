@@ -57,8 +57,7 @@ export function updateCollisions(dt) {
     const candidates = hash.query(bPos.x, bPos.y, bullet.radius);
     let destroyed = false;
 
-    for (let j = 0; j < candidates.length; j++) {
-      const cId = candidates[j];
+    for (const cId of candidates) {
       if (!world.has(cId, 'enemy')) continue;
 
       const pairKey = bId < cId ? `${bId}:${cId}` : `${cId}:${bId}`;
@@ -72,8 +71,8 @@ export function updateCollisions(dt) {
         damageEnemy(cId, bullet.damage);
         bus.emit('hit:enemy', { id: cId, x: ePos.x, y: ePos.y, damage: bullet.damage });
 
-        if (bullet.pierce > 0) {
-          bullet.pierce--;
+        if (bullet.pierceRemaining > 0) {
+          bullet.pierceRemaining--;
         } else {
           world.destroy(bId);
           destroyed = true;
@@ -93,8 +92,7 @@ export function updateCollisions(dt) {
 
     const nearby = hash.query(pPos.x, pPos.y, playerComp.radius);
 
-    for (let i = 0; i < nearby.length; i++) {
-      const cId = nearby[i];
+    for (const cId of nearby) {
 
       const pairKey = playerId < cId ? `${playerId}:${cId}` : `${cId}:${playerId}`;
       if (resolved.has(pairKey)) continue;

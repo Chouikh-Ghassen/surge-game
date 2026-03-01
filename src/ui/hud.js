@@ -242,10 +242,16 @@ export function renderHud(ctx) {
   if (hud.flash) {
     const alpha = Math.min(1, hud.flashTimer * 2);
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = getColor(15); // white
-    ctx.font = 'bold 12px monospace';
+    ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
+    // Text shadow/outline for readability
+    ctx.fillStyle = getColor(0);
+    ctx.fillText(hud.flash, W / 2 + 1, H / 3 + 1);
+    ctx.fillStyle = getColor(15); // white
+    ctx.shadowColor = getColor(0);
+    ctx.shadowBlur = 4;
     ctx.fillText(hud.flash, W / 2, H / 3);
+    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
   }
 
@@ -277,6 +283,18 @@ export function renderHud(ctx) {
 function _drawHealthBar(ctx, x, y, w, h) {
   const ratio = Math.max(0, hud.hp / hud.maxHp);
 
+  // Low health pulsing red warning glow
+  if (ratio <= 0.3 && hud.hp > 0) {
+    const pulse = 0.1 + 0.15 * Math.abs(Math.sin(Date.now() * 0.005));
+    ctx.globalAlpha = pulse;
+    ctx.shadowColor = getColor(6);
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = getColor(6);
+    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
   // Background
   ctx.fillStyle = getColor(1); // dark
   ctx.fillRect(x, y, w, h);
@@ -287,8 +305,13 @@ function _drawHealthBar(ctx, x, y, w, h) {
   else if (ratio > 0.3) color = getColor(9);   // yellow
   else color = getColor(6);                     // red
 
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, w * ratio, h);
+  // Segmented fill — one segment per HP point
+  const segW = w / hud.maxHp;
+  const gap = 1;
+  for (let i = 0; i < hud.hp; i++) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x + i * segW + gap * 0.5, y, segW - gap, h);
+  }
 
   // Border
   ctx.strokeStyle = getColor(15);
@@ -317,9 +340,15 @@ function _drawXpBar(ctx, x, y, w, h) {
   ctx.fillStyle = getColor(1);
   ctx.fillRect(x, y, w, h);
 
-  // Fill
-  ctx.fillStyle = getColor(12); // blue/cyan
-  ctx.fillRect(x, y, w * ratio, h);
+  // Fill with gradient
+  const fillW = w * ratio;
+  if (fillW > 0) {
+    const grad = ctx.createLinearGradient(x, y, x + fillW, y);
+    grad.addColorStop(0, getColor(4));
+    grad.addColorStop(1, getColor(12));
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, fillW, h);
+  }
 
   // Border
   ctx.strokeStyle = getColor(3);

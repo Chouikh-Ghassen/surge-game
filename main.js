@@ -217,8 +217,26 @@ engine.onUpdate = (dt) => {
   const playerData = getPlayerData();
   updateTouchControls(input, playerData);
 
+  // Mouse-driven movement: when mouse is held, compute direction from player to cursor
+  let mx = input.moveX;
+  let my = input.moveY;
+  if (input.mouseHeld && (mx === 0 && my === 0)) {
+    const pPos = getPlayerPos();
+    if (pPos) {
+      const dx = input.mouseLogical.x - pPos.x;
+      const dy = input.mouseLogical.y - pPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const deadZone = 6; // ignore if cursor is very close to player
+      if (dist > deadZone) {
+        const strength = Math.min(1, (dist - deadZone) / 40);
+        mx = (dx / dist) * strength;
+        my = (dy / dist) * strength;
+      }
+    }
+  }
+
   // Update player
-  updatePlayer(input.moveX, input.moveY, input.action, dt);
+  updatePlayer(mx, my, input.action, dt);
 
   // Update enemy brains
   updateEnemyBrains(dt);
@@ -387,6 +405,8 @@ function init() {
   initRenderer(document.getElementById('game'));
   initInput(document.getElementById('game'));
   detectTouch();
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
   showScreen('menu-screen');
   console.log('%c⚡ SURGE v0.2.0 — Phase 2', 'color: #aaff44; font-weight: bold; font-size: 14px;');
 }

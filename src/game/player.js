@@ -339,6 +339,7 @@ export function renderPlayer(ctx) {
   if (!p.alive) return;
 
   const { getColor } = _paletteModule();
+  const vel = world.get(playerId, 'vel');
 
   // Trail
   for (let i = 0; i < p.trail.length; i++) {
@@ -350,9 +351,54 @@ export function renderPlayer(ctx) {
   }
   ctx.globalAlpha = 1;
 
-  // Invulnerability flash (blink effect)
-  if (p.invulnTimer > 0 && Math.floor(p.invulnTimer * 10) % 2 === 0) {
-    return; // Skip render frame for blink effect
+  // Engine exhaust particles when moving
+  if (vel && (vel.x !== 0 || vel.y !== 0)) {
+    const backX = -Math.cos(p.angle);
+    const backY = -Math.sin(p.angle);
+    for (let i = 1; i <= 3; i++) {
+      const ox = pos.x + backX * (p.radius * 0.5 + i * 3) + (Math.random() - 0.5) * 2;
+      const oy = pos.y + backY * (p.radius * 0.5 + i * 3) + (Math.random() - 0.5) * 2;
+      const sz = (4 - i) * 0.8;
+      ctx.globalAlpha = (4 - i) * 0.15;
+      ctx.fillStyle = getColor(i === 1 ? 9 : 14);
+      ctx.fillRect(ox - sz / 2, oy - sz / 2, sz, sz);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Subtle glow under ship
+  ctx.shadowColor = getColor(4);
+  ctx.shadowBlur = 8;
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = getColor(4);
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, p.radius * 0.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+
+  // Invulnerability pulsing shield ring (replaces blink)
+  if (p.invulnTimer > 0) {
+    const pulse = 0.3 + 0.4 * Math.abs(Math.sin(p.invulnTimer * 12));
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = getColor(15);
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = getColor(15);
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, p.radius + 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    // Shield hit flash (bright at start of invulnerability)
+    if (p.invulnTimer > 0.85) {
+      ctx.globalAlpha = (p.invulnTimer - 0.85) * 5;
+      ctx.fillStyle = getColor(15);
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, p.radius + 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // Ship body — triangle pointing in facing direction
@@ -376,6 +422,17 @@ export function renderPlayer(ctx) {
   ctx.lineTo(-p.radius * 0.2, p.radius * 0.3);
   ctx.closePath();
   ctx.fill();
+
+  // Wing accent lines
+  ctx.strokeStyle = getColor(4);
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(-p.radius * 0.1, -p.radius * 0.45);
+  ctx.lineTo(-p.radius * 0.55, -p.radius * 0.55);
+  ctx.moveTo(-p.radius * 0.1, p.radius * 0.45);
+  ctx.lineTo(-p.radius * 0.55, p.radius * 0.55);
+  ctx.stroke();
+
   ctx.restore();
 
   // Dash cooldown indicator (small arc under ship)

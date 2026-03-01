@@ -32,6 +32,10 @@ const state = {
   touchOrigin: null,
   /** @type {{x: number, y: number}} Current touch position */
   touchPos: { x: 0, y: 0 },
+  /** @type {{x: number, y: number}} Mouse cursor in logical coords (always tracked) */
+  mouseLogical: { x: SCREEN.WIDTH / 2, y: SCREEN.HEIGHT / 2 },
+  /** @type {boolean} Is the left mouse button held? */
+  mouseHeld: false,
 };
 
 // ─── Internal State ──────────────────────────────────────────
@@ -63,10 +67,11 @@ export function initInput(canvasEl) {
   canvas.addEventListener('touchend', _onTouchEnd, { passive: false });
   canvas.addEventListener('touchcancel', _onTouchEnd, { passive: false });
 
-  // Mouse (desktop fallback)
+  // Mouse (desktop — move toward cursor)
   canvas.addEventListener('mousedown', _onMouseDown);
-  canvas.addEventListener('mousemove', _onMouseMove);
-  canvas.addEventListener('mouseup', _onMouseUp);
+  window.addEventListener('mousemove', _onMouseMove);
+  window.addEventListener('mouseup', _onMouseUp);
+  canvas.addEventListener('contextmenu', _onContextMenu);
 
   // Resize
   window.addEventListener('resize', _updateScale);
@@ -85,8 +90,9 @@ export function destroyInput() {
     canvas.removeEventListener('touchend', _onTouchEnd);
     canvas.removeEventListener('touchcancel', _onTouchEnd);
     canvas.removeEventListener('mousedown', _onMouseDown);
-    canvas.removeEventListener('mousemove', _onMouseMove);
-    canvas.removeEventListener('mouseup', _onMouseUp);
+    window.removeEventListener('mousemove', _onMouseMove);
+    window.removeEventListener('mouseup', _onMouseUp);
+    canvas.removeEventListener('contextmenu', _onContextMenu);
   }
 }
 
@@ -227,39 +233,44 @@ function _onTouchEnd(e) {
   state.moveY = 0;
 }
 
-// ─── Mouse Handlers (desktop) ───────────────────────────────
+// ─── Mouse Handlers (desktop — move toward cursor) ──────────
 
 let mouseDown = false;
 
 function _onMouseDown(e) {
-  // Right-click → action
+  // Right-click → action (dash)
   if (e.button === 2) {
+    e.preventDefault();
     state.action = true;
     bus.emit('input:action');
     return;
   }
   mouseDown = true;
-  const rect = canvas.getBoundingClientRect();
-  const pos = {
-    x: (e.clientX - rect.left) * scaleX,
-    y: (e.clientY - rect.top) * scaleY,
-  };
-  state.touching = true;
-  state.touchOrigin = { x: pos.x, y: pos.y };
-  state.touchPos = { x: pos.x, y: pos.y };
+  state.mouseHeld = true;
+  _updateMouseLogical(e);
 }
 
 function _onMouseMove(e) {
-  if (!mouseDown) return;
-  const rect = canvas.getBoundingClientRect();
-  state.touchPos.x = (e.clientX - rect.left) * scaleX;
-  state.touchPos.y = (e.clientY - rect.top) * scaleY;
+  _updateMouseLogical(e);
 }
 
-function _onMouseUp() {
+function _onMouseUp(e) {
+  if (e.button === 2) return; // Ignore right-click release
   mouseDown = false;
-  state.touching = false;
-  state.touchOrigin = null;
+  state.mouseHeld = false;
+}
+
+/** Convert client mouse coords to logical canvas coords */
+function _updateMouseLogical(e) {
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  state.mouseLogical.x = (e.clientX - rect.left) * scaleX;
+  state.mouseLogical.y = (e.clientY - rect.top) * scaleY;
+}
+
+/** Prevent context menu on right-click (used for dash) */
+function _onContextMenu(e) {
+  e.preventDefault();
 }
 
 // ─── Exports ─────────────────────────────────────────────────

@@ -18,6 +18,8 @@ import { getColor } from '../config/palettes.js';
 let canvas = null;
 /** @type {CanvasRenderingContext2D} */
 let ctx = null;
+/** Device pixel ratio for sharp text rendering */
+let dpr = 1;
 
 // ─── Screen Shake State ──────────────────────────────────────
 
@@ -37,10 +39,12 @@ let flashColor = '#ffffff';
  */
 export function initRenderer(canvasEl) {
   canvas = canvasEl;
-  canvas.width = SCREEN.WIDTH;
-  canvas.height = SCREEN.HEIGHT;
+  dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width = SCREEN.WIDTH * dpr;
+  canvas.height = SCREEN.HEIGHT * dpr;
   ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = false; // Pixel-art crisp scaling
+  ctx.scale(dpr, dpr);
+  ctx.imageSmoothingEnabled = false; // Crisp shapes
   return ctx;
 }
 
@@ -75,12 +79,17 @@ export function beginFrame() {
   // Clear
   ctx.fillStyle = getColor(0);
   ctx.fillRect(0, 0, SCREEN.WIDTH, SCREEN.HEIGHT);
+
+  return ctx;
 }
 
 /**
  * End the render frame — apply post-processing.
  */
 export function endFrame() {
+  // Vignette overlay for depth
+  drawVignette();
+
   // Flash overlay
   if (flashTimer > 0) {
     ctx.globalAlpha = flashTimer / VISUAL.FLASH_DURATION;
@@ -121,32 +130,72 @@ export function drawArena() {
   const gridColor = getColor(2);
   const gridSpacing = 16;
 
-  ctx.strokeStyle = gridColor;
-  ctx.lineWidth = 0.5;
-  ctx.globalAlpha = 0.3;
-
-  // Vertical lines
-  for (let x = ARENA.LEFT; x <= ARENA.RIGHT; x += gridSpacing) {
-    ctx.beginPath();
-    ctx.moveTo(x, ARENA.TOP);
-    ctx.lineTo(x, ARENA.BOTTOM);
-    ctx.stroke();
+  // Grid dots instead of lines for cleaner look
+  ctx.fillStyle = gridColor;
+  ctx.globalAlpha = 0.25;
+  for (let gx = ARENA.LEFT; gx <= ARENA.RIGHT; gx += gridSpacing) {
+    for (let gy = ARENA.TOP; gy <= ARENA.BOTTOM; gy += gridSpacing) {
+      ctx.fillRect(gx, gy, 1, 1);
+    }
   }
+  ctx.globalAlpha = 1;
 
-  // Horizontal lines
-  for (let y = ARENA.TOP; y <= ARENA.BOTTOM; y += gridSpacing) {
-    ctx.beginPath();
-    ctx.moveTo(ARENA.LEFT, y);
-    ctx.lineTo(ARENA.RIGHT, y);
-    ctx.stroke();
-  }
-
+  // Faint glow ring around arena border
+  ctx.shadowColor = getColor(2);
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = getColor(2);
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.4;
+  ctx.strokeRect(ARENA.LEFT, ARENA.TOP, ARENA.WIDTH, ARENA.HEIGHT);
+  ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
 
   // Arena border
   ctx.strokeStyle = getColor(2);
   ctx.lineWidth = 1;
   ctx.strokeRect(ARENA.LEFT, ARENA.TOP, ARENA.WIDTH, ARENA.HEIGHT);
+}
+
+// ─── Glow & Vignette ────────────────────────────────────────
+
+/**
+ * Draw a soft glow effect using a radial gradient.
+ * @param {number} x @param {number} y
+ * @param {number} radius
+ * @param {string|number} color
+ * @param {number} alpha - 0..1
+ */
+export function drawGlow(x, y, radius, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  const c = typeof color === 'number' ? getColor(color) : color;
+  grad.addColorStop(0, c);
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Cached vignette gradient (reset on resize) */
+let _vignetteGrad = null;
+
+/**
+ * Draw a subtle vignette overlay that darkens screen edges.
+ */
+export function drawVignette() {
+  if (!_vignetteGrad) {
+    const cx = SCREEN.WIDTH / 2;
+    const cy = SCREEN.HEIGHT / 2;
+    const r = Math.max(SCREEN.WIDTH, SCREEN.HEIGHT) * 0.7;
+    _vignetteGrad = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, r);
+    _vignetteGrad.addColorStop(0, 'transparent');
+    _vignetteGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
+  }
+  ctx.fillStyle = _vignetteGrad;
+  ctx.fillRect(0, 0, SCREEN.WIDTH, SCREEN.HEIGHT);
 }
 
 // ─── Shape Drawing Primitives ────────────────────────────────
@@ -312,14 +361,23 @@ export function resizeCanvas() {
 
   canvas.style.width = `${SCREEN.WIDTH * scale}px`;
   canvas.style.height = `${SCREEN.HEIGHT * scale}px`;
-  canvas.style.imageRendering = 'pixelated';
+
+  // Re-apply DPR scaling after any resize that resets canvas
+  dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width = SCREEN.WIDTH * dpr;
+  canvas.height = SCREEN.HEIGHT * dpr;
+  ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.imageSmoothingEnabled = false;
+  _vignetteGrad = null; // invalidate cached gradient
 }
 
 export default {
   initRenderer, getCtx,
   beginFrame, endFrame,
   triggerShake, triggerFlash,
-  drawArena, drawCircle, drawCircleOutline,
+  drawArena, drawGlow, drawVignette,
+  drawCircle, drawCircleOutline,
   drawTriangle, drawDiamond, drawPolygon,
   drawLine, drawRect, drawText, drawParticle, drawHealthBar,
   resizeCanvas,

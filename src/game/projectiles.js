@@ -9,7 +9,8 @@
 
 import world from '../core/ecs.js';
 import bus from '../core/events.js';
-import { isOutOfArena, circleVsCircle, ARENA } from '../core/physics.js';
+import { isOutOfArena, circleVsCircle } from '../core/physics.js';
+import { ARENA } from '../config/balance.js';
 import { getColor } from '../config/palettes.js';
 
 /**
@@ -136,9 +137,27 @@ export function renderBullets(ctx) {
 
   for (const id of bulletIds) {
     const pos = world.get(id, 'pos');
+    const vel = world.get(id, 'vel');
     const bullet = world.get(id, 'bullet');
 
     if (bullet.owner === 'player') {
+      // Motion trail (2-3 fading dots behind bullet)
+      if (vel) {
+        const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y) || 1;
+        const nx = vel.x / speed;
+        const ny = vel.y / speed;
+        for (let t = 1; t <= 3; t++) {
+          ctx.globalAlpha = (4 - t) * 0.1;
+          ctx.fillStyle = getColor(5);
+          ctx.fillRect(pos.x - nx * t * 3 - 0.5, pos.y - ny * t * 3 - 0.5, 1, 1);
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Soft glow halo
+      ctx.shadowColor = getColor(5);
+      ctx.shadowBlur = 4;
+
       // Player bullets: bright, small, palette color 5
       ctx.fillStyle = getColor(5);
       ctx.fillRect(
@@ -147,12 +166,33 @@ export function renderBullets(ctx) {
         bullet.radius * 2,
         bullet.radius * 2
       );
+      ctx.shadowBlur = 0;
     } else {
+      // Motion trail (2 fading dots behind bullet)
+      if (vel) {
+        const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y) || 1;
+        const nx = vel.x / speed;
+        const ny = vel.y / speed;
+        for (let t = 1; t <= 2; t++) {
+          ctx.globalAlpha = (3 - t) * 0.12;
+          ctx.fillStyle = getColor(10);
+          ctx.beginPath();
+          ctx.arc(pos.x - nx * t * 3, pos.y - ny * t * 3, bullet.radius * 0.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Danger glow (reddish)
+      ctx.shadowColor = getColor(10);
+      ctx.shadowBlur = 5;
+
       // Enemy bullets: red, circular, palette color 10
       ctx.fillStyle = getColor(10);
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, bullet.radius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowBlur = 0;
     }
   }
 }

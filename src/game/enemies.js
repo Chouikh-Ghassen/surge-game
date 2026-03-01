@@ -488,6 +488,14 @@ function _renderDrifter(ctx, pos, enemy) {
   const cfg = ENEMIES.DRIFTER;
   const colorIdx = 6 + (cfg.color || 0);
 
+  // Shadow underneath
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = getColor(0);
+  ctx.beginPath();
+  ctx.arc(pos.x + 1, pos.y + 2, enemy.radius * 0.8, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
   // Pulsing opacity based on wobble phase
   const pulse = 0.6 + 0.4 * Math.sin(enemy.behaviorParams.wobblePhase);
 
@@ -495,6 +503,14 @@ function _renderDrifter(ctx, pos, enemy) {
   ctx.fillStyle = getColor(colorIdx);
   ctx.beginPath();
   ctx.arc(pos.x, pos.y, enemy.radius, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1.0;
+
+  // Inner eye/core detail (bright dot in center)
+  ctx.fillStyle = getColor(15);
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, enemy.radius * 0.25, 0, TAU);
   ctx.fill();
   ctx.globalAlpha = 1.0;
 }
@@ -510,6 +526,14 @@ function _renderDasher(ctx, pos, enemy) {
   const bp = enemy.behaviorParams;
   const r = enemy.radius;
 
+  // Shadow underneath
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = getColor(0);
+  ctx.beginPath();
+  ctx.arc(pos.x + 1, pos.y + 2, r * 0.7, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
   // Stretch factor: elongates along charge direction during charge
   const stretch = bp.stretchFactor || 1.0;
   const sx = stretch;      // stretch along X (rotated)
@@ -518,6 +542,19 @@ function _renderDasher(ctx, pos, enemy) {
   // Flash white during telegraph state
   const isTelegraph = enemy.state === 'telegraph';
   const flashOn = isTelegraph && (Math.floor(enemy.stateTimer * 10) % 2 === 0);
+
+  // Pulsing danger indicator during telegraph (expanding red ring)
+  if (isTelegraph) {
+    const pulse = 0.3 + 0.5 * Math.abs(Math.sin(enemy.stateTimer * 15));
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = getColor(10);
+    ctx.lineWidth = 1.5;
+    const ringR = r + 4 + Math.sin(enemy.stateTimer * 20) * 2;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, ringR, 0, TAU);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 
   ctx.fillStyle = flashOn ? getColor(15) : getColor(colorIdx);
 
@@ -554,6 +591,14 @@ function _renderSprayer(ctx, pos, enemy) {
   const bp = enemy.behaviorParams;
   const r = enemy.radius;
 
+  // Shadow underneath
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = getColor(0);
+  ctx.beginPath();
+  ctx.arc(pos.x + 1, pos.y + 2, r * 0.7, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
   ctx.fillStyle = getColor(colorIdx);
 
   // ── Octagon body ──
@@ -588,8 +633,18 @@ function _renderSprayer(ctx, pos, enemy) {
  */
 function _renderOrbitor(ctx, pos, enemy) {
   const colorIdx = 6 + (ENEMIES.ORBITOR.color || 3);
-  const angle = enemy.behaviorParams.orbitAngle || 0;
-  drawPolygon(pos.x, pos.y, enemy.radius, 5, angle, getColor(colorIdx));
+
+  // Shadow underneath
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = getColor(0);
+  ctx.beginPath();
+  ctx.arc(pos.x + 1, pos.y + 2, enemy.radius * 0.7, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Spinning pentagon — use orbit angle * 3 for visible rotation
+  const spinAngle = (enemy.behaviorParams.orbitAngle || 0) * 3;
+  drawPolygon(pos.x, pos.y, enemy.radius, 5, spinAngle, getColor(colorIdx));
 }
 
 /**
@@ -598,6 +653,15 @@ function _renderOrbitor(ctx, pos, enemy) {
  */
 function _renderSplitter(ctx, pos, enemy) {
   const colorIdx = 6 + (ENEMIES.SPLITTER.color || 4);
+
+  // Shadow underneath
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = getColor(0);
+  ctx.beginPath();
+  ctx.arc(pos.x + 1, pos.y + 2, enemy.radius * 0.7, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
   drawPolygon(pos.x, pos.y, enemy.radius, 6, 0, getColor(colorIdx));
 }
 
@@ -608,6 +672,15 @@ function _renderSplitter(ctx, pos, enemy) {
 function _renderSplitterChild(ctx, pos, enemy) {
   // Slightly different tint — one index brighter
   const colorIdx = 6 + (ENEMIES.SPLITTER.color || 4) + 1;
+
+  // Shadow underneath
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = getColor(0);
+  ctx.beginPath();
+  ctx.arc(pos.x + 1, pos.y + 2, enemy.radius * 0.6, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
   drawPolygon(pos.x, pos.y, enemy.radius, 6, 0, getColor(colorIdx));
 }
 
@@ -619,9 +692,21 @@ function _renderShielder(ctx, pos, enemy) {
   const colorIdx = 6 + (ENEMIES.SHIELDER.color || 5);
   const bp = enemy.behaviorParams;
 
-  // Aura ring (semi-transparent)
-  ctx.globalAlpha = 0.25;
+  // Shadow underneath
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = getColor(0);
+  ctx.beginPath();
+  ctx.arc(pos.x + 1, pos.y + 2, enemy.radius * 0.7, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Animated shield shimmer aura ring
+  const shimmer = 0.15 + 0.15 * Math.sin(Date.now() * 0.006);
+  ctx.globalAlpha = shimmer;
+  ctx.shadowColor = getColor(colorIdx);
+  ctx.shadowBlur = 4;
   drawCircleOutline(pos.x, pos.y, bp.shieldRadius, getColor(colorIdx), 1.5);
+  ctx.shadowBlur = 0;
   ctx.globalAlpha = 1.0;
 
   // Octagon body
