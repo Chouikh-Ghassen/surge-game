@@ -6,11 +6,27 @@ Built from scratch. No engine, no framework, no dependencies. Just vanilla JavaS
 
 ---
 
-## What is this?
+## The Story
+
+We fell in love with **Swarm** — the bullet-heaven mode Riot dropped into League of Legends in summer 2024. Four friends, one screen, dodging thousands of enemies while the game kept scaling against us. It was the most fun we'd had in years.
+
+Then Riot rotated it out. Gone. No standalone release, no comeback date, just a hole in our game nights.
+
+So we said: *"Fine. We'll build our own."*
+
+We started sketching on a napkin. What if the game didn't just throw harder waves at you — what if it actually **watched** you play? What if it knew you always dodge left, knew when you were panicking, knew when you were bored? What if you could plug in an LLM and the game would literally *think* about how to challenge you?
+
+SURGE is what came out. Two people, zero dependencies, a phone screen, and an AI that learns your habits in real time. We didn't just recreate Swarm — we gave it a brain.
+
+And we're not done. The goal is to ship this as a real mobile game.
+
+---
+
+## What Is It?
 
 SURGE is a mobile-first, portrait-mode bullet-heaven survival game. You auto-fire. Enemies come at you in waves. You dodge, dash, level up, and try to survive 30 waves of increasingly creative mayhem.
 
-The twist? **An AI Director watches everything you do** — your stress level, your dodge patterns, your build choices — and dynamically adjusts what it throws at you. Too comfortable? Here come the Dashers. Tilting? It'll ease off. If you plug in an LLM, it gets *weird* — the Director starts crafting encounters with narrative flavor text and strategic reasoning.
+The twist? **An AI Director watches everything you do** — your stress level, your dodge patterns, your build choices — and dynamically adjusts what it throws at you next. Too comfortable? Here come the Dashers. Tilting? It eases off. Plug in an LLM (Mistral, OpenAI, a local Ollama model — anything), and the Director starts crafting encounters with narrative flavor text and strategic reasoning.
 
 Think Vampire Survivors meets Left 4 Dead's AI Director, shrunk down to a phone screen.
 
@@ -104,7 +120,7 @@ Pick 1 of 3 every few waves. Each stacks 1-3 times.
 
 ## The AI Pipeline
 
-This is the part I'm most proud of:
+This is the part we're most proud of:
 
 1. **Stress Model** — Reads 6 real-time signals (HP ratio, enemy proximity, dodge frequency, DPS taken/given, combo). Outputs a smooth 0-1 stress score.
 
@@ -146,6 +162,26 @@ This is the part I'm most proud of:
 
 ---
 
+## LLM Integration — Plug In Any Brain
+
+SURGE's LLM adapter is **provider-agnostic**. Any OpenAI-compatible API works out of the box:
+
+| Provider | Endpoint Example | Notes |
+|----------|-----------------|-------|
+| **Mistral** | `https://api.mistral.ai/v1` | Recommended. Fast, affordable. |
+| **OpenAI** | `https://api.openai.com/v1` | GPT-4o-mini works great. |
+| **Groq** | `https://api.groq.com/openai/v1` | Blazing fast inference. |
+| **Together AI** | `https://api.together.xyz/v1` | Wide model selection. |
+| **Ollama** (local) | `http://localhost:11434` | No API key needed. Free. |
+| **LM Studio** (local) | `http://localhost:1234` | No API key needed. Free. |
+| **vLLM** (local) | `http://localhost:8000` | No API key needed. Free. |
+
+Configure in **Settings** → enter your endpoint, API key (cloud only), and model name. Hit "Test Connection" to verify. That's it — the next run in LLM mode will use your model.
+
+> Local LLMs are auto-detected (localhost / 127.0.0.1) and skip API key validation.
+
+---
+
 ## Tech
 
 | | |
@@ -155,21 +191,24 @@ This is the part I'm most proud of:
 | Architecture | Custom ECS + Pub/Sub + Fixed Timestep |
 | AI | Stress Model + Bandit Director + LLM integration |
 | Audio | Web Audio API (procedural) |
+| LLM Support | Any OpenAI-compatible API (Mistral, OpenAI, Groq, Ollama, LM Studio, vLLM...) |
 | Dependencies | **None** |
 | Build Step | **None** |
 | Source Files | 40+ |
 
 ---
 
-## What I'd Do Next
+## What's Next
 
-- **Unit tests** — The ECS, physics, and card systems are pure functions. Perfect candidates.
-- **TypeScript migration** — Catch the API mismatches at compile time instead of runtime.
-- **Sprite assets** — Currently everything is code-rendered shapes. Sprites would elevate the look.
-- **Netcode** — The seeded RNG + fixed timestep was chosen specifically to enable future replay/spectator features.
-- **Cloud leaderboard** — Currently local only. A simple serverless function could power global rankings.
+- **Publish as a mobile game** — This is the end goal. PWA-ready today, native wrapper tomorrow.
+- **Multiplayer co-op** — Swarm was best with friends. We want that back.
+- **Sprite assets** — Currently everything is code-rendered shapes. Real art would elevate it.
+- **Cloud leaderboard** — Global rankings via a simple serverless backend.
 - **More enemy types** — The FSM brain system makes adding new enemies straightforward.
+- **Unit tests** — The ECS, physics, and card systems are pure functions. Perfect candidates.
+- **TypeScript migration** — Catch API mismatches at compile time instead of runtime.
+- **Netcode** — The seeded RNG + fixed timestep was chosen specifically to enable future replay/spectator features.
 
 ---
 
-*Built by Ayoub Chamakhi & Ghassen Chouikh — 2026*
+*Built with ❤️ by Ayoub Chamakhi & Ghassen Chouikh — 2026*

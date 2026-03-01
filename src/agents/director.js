@@ -269,7 +269,8 @@ export function startNextWave() {
     }
 
     // Trigger LLM query every N waves (async, results used for future waves)
-    if (state.wave % DIRECTOR.LLM_QUERY_INTERVAL === 0 && !state._llmPending) {
+    // Also trigger on wave 1 so the LLM can plan the first batch
+    if ((state.wave === 1 || state.wave % DIRECTOR.LLM_QUERY_INTERVAL === 0) && !state._llmPending) {
       _triggerLLMQuery(state.wave);
     }
   } else {
@@ -847,7 +848,11 @@ async function _triggerLLMQuery(currentWave) {
     } else {
       // Standard mode: single query
       const llm = getLLMAdapter();
-      if (!llm || !llm.isConfigured()) { state._llmPending = false; return; }
+      if (!llm || !llm.isConfigured()) {
+        console.warn('[Director/LLM] Adapter not configured — skipping query. Configure LLM in Settings.');
+        state._llmPending = false;
+        return;
+      }
       const llmResult = await llm.query(DIRECTOR_SYSTEM_PROMPT, stateJson);
       if (llmResult) {
         try {

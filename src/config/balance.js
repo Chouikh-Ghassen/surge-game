@@ -122,10 +122,10 @@ export const DIRECTOR = Object.freeze({
   BANDIT_LEARN_RATE:     0.1,   // softmax bandit learning rate
   // LLM mode
   LLM_QUERY_INTERVAL:    3,     // query every N waves
-  LLM_TIMEOUT_MS:        3000,
+  LLM_TIMEOUT_MS:        8000,  // 8s timeout (cloud APIs can be slow)
   LLM_MAX_INPUT_TOKENS:  250,
-  LLM_MAX_OUTPUT_TOKENS: 150,
-  LLM_RATE_LIMIT_MS:     20000, // min 20s between calls
+  LLM_MAX_OUTPUT_TOKENS: 300,   // enough for 3-wave plan + rationale
+  LLM_RATE_LIMIT_MS:     10000, // min 10s between calls
   // Wave pacing
   WAVES_PER_UPGRADE:     3,
   BOSS_WAVE_INTERVAL:    10,

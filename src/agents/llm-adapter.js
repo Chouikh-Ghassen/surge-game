@@ -2,10 +2,13 @@
  * @module agents/llm-adapter
  * @description LLM Adapter Agent — bridges SURGE with any OpenAI-compatible API.
  *
- * Supports: OpenAI, Ollama, Groq, Together AI, LM Studio, or any
- * OpenAI-compatible endpoint. Auto-detects Ollama format.
+ * Supports: OpenAI, Mistral, Ollama, Groq, Together AI, LM Studio,
+ * llama.cpp, vLLM, or any OpenAI-compatible endpoint.
+ * Auto-detects local servers (Ollama, LM Studio, etc.).
  *
  * Features:
+ *   - Generic API support — any OpenAI-compatible endpoint works out of the box
+ *   - Local LLM support — auto-detects localhost/127.0.0.1 endpoints (no API key needed)
  *   - Rate limiting (configurable minimum interval)
  *   - Timeout with AbortController
  *   - Token tracking
@@ -13,7 +16,10 @@
  *   - Graceful fallback on error (returns null)
  *
  * @example
- *   const llm = new LLMAdapter({ endpoint, apiKey, model });
+ *   // Cloud (Mistral, OpenAI, Groq, etc.):
+ *   const llm = new LLMAdapter({ endpoint: 'https://api.mistral.ai/v1', apiKey: 'sk-...', model: 'mistral-small-latest' });
+ *   // Local (Ollama, LM Studio, llama.cpp, vLLM):
+ *   const llm = new LLMAdapter({ endpoint: 'http://localhost:11434', model: 'llama3' });
  *   const result = await llm.query(systemPrompt, userMessage);
  *   if (result) console.log(result.response);
  */
@@ -25,9 +31,9 @@ import { DIRECTOR } from '../config/balance.js';
 const DEFAULTS = {
   endpoint: 'https://api.openai.com/v1',
   model: 'gpt-4o-mini',
-  timeout: DIRECTOR.LLM_TIMEOUT_MS || 3000,
-  rateLimitMs: DIRECTOR.LLM_RATE_LIMIT_MS || 20000,
-  maxOutputTokens: DIRECTOR.LLM_MAX_OUTPUT_TOKENS || 150,
+  timeout: DIRECTOR.LLM_TIMEOUT_MS || 8000,
+  rateLimitMs: DIRECTOR.LLM_RATE_LIMIT_MS || 10000,
+  maxOutputTokens: DIRECTOR.LLM_MAX_OUTPUT_TOKENS || 300,
 };
 
 // ─── LLMAdapter Class ────────────────────────────────────────
@@ -59,12 +65,14 @@ export class LLMAdapter {
 
   /**
    * Check if the adapter is configured with at minimum an endpoint.
-   * Ollama doesn't need an API key. OpenAI does.
+   * Local LLMs (Ollama, LM Studio, llama.cpp, vLLM) don't need an API key.
+   * Cloud APIs (OpenAI, Mistral, Groq, Together) require one.
    * @returns {boolean}
    */
   isConfigured() {
-    if (this._isOllama()) return true;
-    return !!(this.endpoint && this.apiKey);
+    if (!this.endpoint) return false;
+    if (this._isLocal()) return true;
+    return !!this.apiKey;
   }
 
   /**
@@ -173,45 +181,71 @@ export class LLMAdapter {
 
   // ─── Internal ────────────────────────────────────────────
 
+  /**
+   * Detect if this is a local LLM server (no API key needed).
+   * Covers: Ollama, LM Studio, llama.cpp, vLLM, text-generation-webui, etc.
+   * @returns {boolean}
+   */
+  _isLocal() {
+    return /localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0/i.test(this.endpoint);
+  }
+
+  /**
+   * Detect Ollama specifically (uses different request/response format).
+   * @returns {boolean}
+   */
   _isOllama() {
-    return this.endpoint.includes('localhost:11434') || this.endpoint.includes('127.0.0.1:11434');
+    return this._isLocal() && /(:11434|\/api\/)/i.test(this.endpoint);
   }
 
   _getUrl() {
+    // If the user already provided a full URL with path, use it as-is
+    const path = new URL(this.endpoint).pathname;
+    if (path && path !== '/' && path.length > 1) {
+      // User supplied a path component — check if it's a complete API route
+      if (path.includes('/chat/completions') || path.includes('/api/chat') || path.includes('/api/generate')) {
+        return this.endpoint;
+      }
+    }
+
     if (this._isOllama()) {
       return `${this.endpoint}/api/chat`;
     }
-    // OpenAI-compatible
-    return `${this.endpoint}/chat/completions`;
+    // OpenAI-compatible (works for OpenAI, Mistral, Groq, Together, LM Studio, vLLM, etc.)
+    // Append /chat/completions if endpoint ends with /v1 or similar
+    const base = this.endpoint.replace(/\/+$/, '');
+    if (base.endsWith('/v1')) {
+      return `${base}/chat/completions`;
+    }
+    return `${base}/v1/chat/completions`;
   }
 
   _getHeaders() {
     const headers = { 'Content-Type': 'application/json' };
-    if (this.apiKey && !this._isOllama()) {
+    if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
     return headers;
   }
 
   _buildRequestBody(systemPrompt, userMessage) {
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ];
+
     if (this._isOllama()) {
       return {
         model: this.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
+        messages,
         stream: false,
         options: { num_predict: this.maxOutputTokens },
       };
     }
-    // OpenAI-compatible
+    // OpenAI-compatible (works for OpenAI, Mistral, Groq, Together, LM Studio, vLLM)
     return {
       model: this.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
+      messages,
       max_tokens: this.maxOutputTokens,
       temperature: 0.7,
     };
@@ -242,14 +276,36 @@ let _instance = null;
 
 /**
  * Get or create the global LLM adapter instance.
- * @param {object} [config] — pass config on first call to initialize
- * @returns {LLMAdapter}
+ * If config is provided, always creates a new instance (re-init).
+ * @param {object} [config] — pass config to (re)initialize
+ * @returns {LLMAdapter|null} — returns null if no instance and no config
  */
 export function getLLMAdapter(config) {
-  if (!_instance || config) {
+  if (config) {
     _instance = new LLMAdapter(config);
   }
   return _instance;
+}
+
+/**
+ * Initialize the adapter from saved settings (localStorage).
+ * Call this at run start so the Director can use it.
+ */
+export function initLLMFromSettings() {
+  try {
+    const raw = localStorage.getItem('surge_settings');
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s.llmEndpoint) return null;
+    return getLLMAdapter({
+      endpoint: s.llmEndpoint,
+      apiKey: s.llmApiKey || '',
+      model: s.llmModel || DEFAULTS.model,
+      maxOutputTokens: s.llmTokens || DEFAULTS.maxOutputTokens,
+    });
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -259,4 +315,4 @@ export function resetLLMAdapter() {
   _instance = null;
 }
 
-export default { LLMAdapter, getLLMAdapter, resetLLMAdapter };
+export default { LLMAdapter, getLLMAdapter, resetLLMAdapter, initLLMFromSettings };

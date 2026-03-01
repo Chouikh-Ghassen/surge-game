@@ -46,7 +46,7 @@ import { SCREEN, PLAYER, TIMING, SCORE, UPGRADES } from './src/config/balance.js
 import { getColor, setPalette } from './src/config/palettes.js';
 
 // ─── Phase 4: LLM Director ──────────────────────────────────
-import { getLLMAdapter, resetLLMAdapter } from './src/agents/llm-adapter.js';
+import { getLLMAdapter, resetLLMAdapter, initLLMFromSettings } from './src/agents/llm-adapter.js';
 import { getLLMTip } from './src/agents/director.js';
 
 // ─── Phase 5: Gamification ───────────────────────────────────
@@ -203,7 +203,25 @@ function startRun() {
   initStressModel();
   initTelemetry();
   const mode = document.getElementById('sel-mode')?.value || 'classic';
-  initDirector({ mode });
+
+  // Initialize LLM adapter from saved settings so the Director can use it
+  if (mode === 'llm') {
+    const settings = loadSettings();
+    resetLLMAdapter();
+    if (settings.llmEndpoint) {
+      getLLMAdapter({
+        endpoint: settings.llmEndpoint,
+        apiKey: settings.llmApiKey || '',
+        model: settings.llmModel || 'gpt-4o-mini',
+        maxOutputTokens: settings.llmTokens || 300,
+      });
+    } else {
+      initLLMFromSettings();
+    }
+  }
+
+  const llmPremium = loadSettings().llmPremium || false;
+  initDirector({ mode, llmPremium });
 
   // Start the first wave
   startNextWave();
