@@ -25,6 +25,22 @@ The result is a game that continuously adjusts itself based on how the player is
 
 ---
 
+## Play It
+
+```bash
+# Any static server works:
+python3 -m http.server 8080
+
+# Or:
+npx serve .
+```
+
+Open **http://localhost:8080**. That's it. No `npm install`, no build step, no waiting.
+
+> ES modules require HTTP — opening `index.html` via `file://` won't work.
+
+---
+
 ## Collaboration
 
 This project was developed in collaboration with Ayoub Chamakhi for the Mistral AI Hackathon.
