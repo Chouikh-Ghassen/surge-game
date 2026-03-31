@@ -5,209 +5,156 @@
 ![Alt text](icons/SURGE_AI_HACKATHON.png)
 ---
 
-## The Story
+# ⚡ SURGE — AI-Driven Adaptive Bullet-Heaven Game
 
-We fell in love with **Swarm**: the bullet-heaven mode Riot dropped into League of Legends in summer 2024. Four friends, one screen, dodging thousands of enemies while the game kept scaling against us. It was the most fun we'd had in years.
+**A real-time adaptive bullet-heaven game where AI models player behavior and dynamically adjusts gameplay difficulty and encounters.**
 
-Then Riot rotated it out. Gone. No standalone release, no comeback date, just a hole in our game nights.
-
-So we said: *"Fine. We'll build our own."*
-
-We started sketching on a napkin. What if the game didn't just throw harder waves at you, what if it actually **watched** you play? What if it knew you always dodge left, knew when you were panicking, knew when you were bored? What if you could plug in an LLM and the game would literally *think* about how to challenge you?
-
-SURGE is what came out. Two people, zero dependencies, a phone screen, and an AI that learns your habits in real time. We didn't just recreate Swarm, we gave it a brain.
-
-And we're not done. The goal is to ship this as a real mobile game, and ofc, to win the Mistral AI Worldwide Hackathon.
+SURGE is a mobile-first survival game inspired by Vampire Survivors and Swarm (League of Legends). It introduces an AI Director that continuously observes player behavior and adapts the game in real time, creating a personalized gameplay experience.
 
 ---
 
-## What Is It?
+## 🧠 Overview
 
-SURGE is a mobile-first, portrait-mode bullet-heaven survival game. You auto-fire. Enemies come at you in waves. You dodge, dash, level up, and try to survive 30 waves of increasingly creative mayhem.
+SURGE is not a static difficulty game. It uses a closed-loop AI system that:
 
-The twist? **An AI Director watches everything you do**: your stress level, your dodge patterns, your build choices, and dynamically adjusts what it throws at you next. Too comfortable? Here come the Dashers. Tilting? It eases off. Plug in an LLM (Mistral, OpenAI, a local Ollama model, anything), and the Director starts crafting encounters with narrative flavor text and strategic reasoning.
+- Observes player behavior in real time  
+- Builds a dynamic model of player stress and performance  
+- Adapts enemy waves, pacing, and difficulty dynamically  
+- Optionally uses LLMs for higher-level decision-making and narrative generation  
 
-Think Vampire Survivors meets Left 4 Dead's AI Director, shrunk down to a phone screen.
-
----
-
-## Play It
-
-```bash
-# Any static server works:
-python3 -m http.server 8080
-
-# Or:
-npx serve .
-```
-
-Open **http://localhost:8080**. That's it. No `npm install`, no build step, no waiting.
-
-> ES modules require HTTP — opening `index.html` via `file://` won't work.
+The result is a game that continuously adjusts itself based on how the player is performing.
 
 ---
 
-## Controls
+## 🤝 Collaboration
 
-| Action | Keyboard | Touch |
-|--------|----------|-------|
-| Move | WASD / Arrows / Mouse | Touch & drag |
-| Dash | Space | Double-tap |
-| Pause | Escape | — |
-| Fire | Automatic | Automatic |
+This project was developed in collaboration with Ayoub Chamakhi for the Mistral AI Hackathon.
 
-Portrait mode. 240×400 logical pixels. Scales to any screen.
+My main contributions include:
 
----
-
-## The Architecture (in 60 seconds)
-
-**Zero dependencies.** No React. No Phaser. No Pixi. The import tree is pure ES modules served as-is.
-
-The whole thing runs on a custom **Entity Component System**,  entities are integers, components are Maps, queries use archetype caching. Below that sits a **fixed-timestep game loop** (60Hz physics, interpolated rAF rendering) and a **spatial hash** for broad-phase collision detection.
-
-The AI Director doesn't spawn enemies directly. It picks **encounter cards**, each card is a composition of enemies, formations, and intensity ratings. Three Director modes use this same card abstraction:
-
-- **Classic:** 30 hand-authored waves. Deterministic. Seeded RNG for replays.
-- **Adaptive:** Softmax bandit algorithm driven by a real-time player stress model.
-- **LLM:** Queries an external LLM every few waves with player state. The LLM picks cards, adds modifiers, and writes flavor text. Falls back to Adaptive if the LLM times out.
-
-```
-main.js ─── State machine (MENU → PLAYING → UPGRADE → GAMEOVER)
-│
-├── src/core/         Engine: ECS, game loop, events, input, physics
-├── src/config/       Balance constants, 40+ encounter cards, palettes
-├── src/game/         Player, 7 enemy types, bullets, collision, particles, upgrades
-│                     + pilot rank, achievements, daily challenges, leaderboard,
-│                       mastery, cosmetics, battle pass
-├── src/agents/       AI Director (3 modes), enemy FSM brains, stress model,
-│                     telemetry, coach, LLM adapter, planner-critic, analytics
-├── src/ui/           Canvas renderer, HUD, touch controls, CRT filter,
-│                     report screen, store, tutorial
-├── src/audio/        Procedural Web Audio SFX (no audio files)
-└── prompts/          LLM system prompts (Director + Coach)
-```
+- Design and implementation of the AI Director system  
+- Real-time player modeling and stress detection system  
+- Adaptive difficulty system using bandit-based decision logic  
+- Integration of LLM-based gameplay adaptation  
+- Architecture design of real-time AI feedback loops  
 
 ---
 
-## Enemy Types
+## 🧠 AI Director System
 
-| Type | What It Does | Shows Up |
-|------|-------------|----------|
-| **Drifter** | Homing + sinusoidal wobble | Wave 1 |
-| **Dasher** | Telegraph → charge → recover FSM | Wave 2 |
-| **Sprayer** | Stationary turret, bullet fans | Wave 3 |
-| **Orbitor** | Orbits you, fires periodically | Wave 4 |
-| **Splitter** | Splits into 2-3 children on death | Wave 4 |
-| **Shielder** | Escorts allies with damage-reduction aura | Wave 5 |
+The AI Director is the core system that controls gameplay adaptation.
 
-All types come in **Elite** (1.5× stats, crown) and **Boss** (5× HP, 2× size, phase transitions) variants.
+It works as a continuous feedback loop:
 
----
+1. Collects gameplay telemetry (movement, HP, damage, dodge patterns)  
+2. Computes a real-time stress score representing player state  
+3. Selects enemy encounters based on player performance  
+4. Dynamically adjusts difficulty and pacing  
 
-## Upgrades (15)
+### Core Components
 
-| Category | Options |
-|----------|---------|
-| **Weapon** (6) | Spread Shot, Pierce, Rapid Fire, Heavy Rounds, Homing, Ricochet |
-| **Defense** (5) | Shield, Quick Dash, Slow Aura, Regeneration, Plating |
-| **Utility** (4) | Magnet, Nuke, Decoy, Scanner |
-
-Pick 1 of 3 every few waves. Each stacks 1-3 times.
+- **Stress Model**: Converts gameplay signals into a continuous difficulty indicator  
+- **Adaptive Engine**: Uses bandit-based logic to balance challenge and engagement  
+- **LLM Director (optional)**: Generates encounter strategies and narrative descriptions  
 
 ---
 
-## The AI Pipeline
+## 🎮 Game Concept
 
-This is the part we're most proud of:
-
-1. **Stress Model**: Reads 6 real-time signals (HP ratio, enemy proximity, dodge frequency, DPS taken/given, combo). Outputs a smooth 0-1 stress score.
-
-2. **Director**: Consumes stress + telemetry to pick encounter cards. In Adaptive mode, it uses a softmax bandit that balances exploration vs exploitation. In LLM mode, it sends a structured state summary and gets back card picks + narrative.
-
-3. **Telemetry**: Per-frame recording: movement heatmap, dodge tracking, DPS windows, build progression.
-
-4. **Coach**: After each run, generates a diagnostic report. Analyzes playstyle, identifies improvement areas, gives specific tips based on what actually happened.
-
-5. **Planner-Critic**: Premium LLM mode. Planner proposes a wave plan, Critic reviews it for balance issues, planner adjusts. Two-agent deliberation loop.
-
-6. **Analytics**: Event batching, privacy controls, local storage fallback.
+- Auto-fire bullet-heaven survival gameplay  
+- Wave-based enemy progression  
+- Upgrade-based player builds  
+- Real-time adaptive difficulty scaling  
+- AI-driven encounter generation  
 
 ---
 
-## Gamification
+## ⚙️ Architecture
 
-- **Pilot Rank**: 20 ranks from Rookie to Legend. XP from waves, bosses, completions, no-hit bonuses.
-- **40 Achievements**: Combat, Survival, Mastery, and Fun categories. "Kill 1000 enemies." "Win without dashing." "Have all 15 upgrades."
-- **Daily Challenges**: 3 per day (easy/medium/hard), deterministic from date seed. Streak tracking.
-- **Leaderboard**: Top 50 local runs. Sort by score, wave, or kills. Seed sharing for challenge runs.
-- **Mastery**: Per-upgrade and per-enemy mastery tiers (Bronze → Diamond).
-- **Cosmetics**: 10 categories, 35+ items, 4 rarity tiers. Trails, death effects, bullet skins, titles.
-- **Battle Pass**: 30-tier seasonal system with free + premium tracks.
-- **Store**: Browse and purchase cosmetics with in-game coins earned from runs.
+- Custom Entity Component System (ECS)  
+- Fixed timestep game loop (60Hz)  
+- Spatial hashing for collision detection  
+- Event-driven system architecture  
+- Modular AI Director system  
 
 ---
 
-## Polish
+## 🧩 Enemy Types
 
-- **Procedural Audio**: All SFX generated via Web Audio API oscillators and noise. Shoot, hit, death, level up, wave clear, dash, game over, victory. Plus an ambient drone soundtrack. Zero audio files.
-- **CRT Filter**: Scanlines, vignette, subtle flicker. Toggle in settings.
-- **Screen Shake & Flash**: Juice on every hit and level up.
-- **Coach Report**: Post-run terminal overlay with CRT aesthetic.
-- **Onboarding Tutorial**: First-run interactive walkthrough covering all core mechanics.
-- **PWA**: Manifest + service worker. Install to homescreen, play offline.
-- **Object Pooling**: Particle and vector pools to reduce GC pressure at high entity counts.
-- **Settings**: LLM config (endpoint, key, model, token budget), audio sliders, visual toggles.
+- Drifter: Homing movement  
+- Dasher: Charge attacks  
+- Sprayer: Bullet patterns  
+- Orbitor: Orbiting behavior  
+- Splitter: Splits on death  
+- Shielder: Defensive aura support  
 
----
-
-## LLM Integration — Plug In Any Brain
-
-SURGE's LLM adapter is **provider-agnostic**. Any API works out of the box:
-
-| Provider | Endpoint Example | Notes |
-|----------|-----------------|-------|
-| **Mistral** | `https://api.mistral.ai/v1` | Recommended. Fast, affordable. |
-| **OpenAI** | `https://api.openai.com/v1` | GPT-4o-mini works great. |
-| **Groq** | `https://api.groq.com/openai/v1` | Blazing fast inference. |
-| **Together AI** | `https://api.together.xyz/v1` | Wide model selection. |
-| **Ollama** (local) | `http://localhost:11434` | No API key needed. Free. |
-| **LM Studio** (local) | `http://localhost:1234` | No API key needed. Free. |
-| **vLLM** (local) | `http://localhost:8000` | No API key needed. Free. |
-
-Configure in **Settings** → enter your endpoint, API key (cloud only), and model name. Hit "Test Connection" to verify. That's it, the next run in LLM mode will use your model.
-
-> Local LLMs are auto-detected (localhost / 127.0.0.1) and skip API key validation.
+Each enemy can appear as Elite or Boss variants.
 
 ---
 
-## Tech
+## 🔧 Technology Stack
 
-| | |
-|---|---|
-| Language | Vanilla JavaScript (ES2022+) |
-| Rendering | HTML5 Canvas 2D |
-| Architecture | Custom ECS + Pub/Sub + Fixed Timestep |
-| AI | Stress Model + Bandit Director + LLM integration |
-| Audio | Web Audio API (procedural) |
-| LLM Support | Any OpenAI-compatible API (Mistral, OpenAI, Groq, Ollama, LM Studio, vLLM...) |
-| Dependencies | **None** |
-| Build Step | **None** |
-| Source Files | 40+ |
+- JavaScript (ES2022)  
+- HTML5 Canvas 2D  
+- Custom ECS engine  
+- Web Audio API (procedural sound)  
+- LLM APIs (OpenAI-compatible)  
+- No external game engine or dependencies  
 
 ---
 
-## What's Next
+## 🚀 LLM Integration
 
-- **Publish as a mobile game**: This is the end goal. PWA-ready today, native wrapper tomorrow.
-- **Multiplayer co-op**: Swarm was best with friends. We want that back.
-- **Sprite assets**: Currently everything is code-rendered shapes. Real art would elevate it.
-- **Cloud leaderboard**:  Global rankings via a simple serverless backend.
-- **More enemy types**: The FSM brain system makes adding new enemies straightforward.
-- **Unit tests**: The ECS, physics, and card systems are pure functions. Perfect candidates.
-- **TypeScript migration**: Catch API mismatches at compile time instead of runtime.
-- **Netcode**: The seeded RNG + fixed timestep was chosen specifically to enable future replay/spectator features.
+Supports multiple providers:
+
+- OpenAI  
+- Mistral AI  
+- Groq  
+- Together AI  
+- Local models (Ollama, LM Studio, vLLM)  
+
+The LLM can:
+- Influence encounter selection  
+- Generate gameplay narratives  
+- Assist in adaptive difficulty decisions  
 
 ---
 
-*Built with ❤️ by Ayoub Chamakhi & Ghassen Chouikh, 2026*
+## 🎯 Key Features
+
+- Real-time adaptive difficulty system  
+- Player behavior modeling (stress-based system)  
+- AI-driven encounter generation  
+- Optional LLM-powered game director  
+- Custom game engine (no dependencies)  
+- Mobile-first design  
+- Procedural audio system  
+- Offline-capable PWA  
+
+---
+
+## 📊 What This Project Demonstrates
+
+- Real-time AI system design  
+- Player behavior modeling  
+- Adaptive decision systems (bandit logic)  
+- Applied LLM integration in interactive systems  
+- Game AI architecture  
+- Performance-constrained system design  
+
+---
+
+## ⚡ Controls
+
+| Action | Input |
+|--------|------|
+| Move | WASD / Arrows / Touch |
+| Dash | Space / Double tap |
+| Pause | Escape |
+| Fire | Automatic |
+
+---
+
+## ❤️ Credits
+
+Built by Ayoub Chamakhi and Ghassen Chouikh
