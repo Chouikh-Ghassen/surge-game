@@ -25,6 +25,13 @@ The result is a game that continuously adjusts itself based on how the player is
 
 ---
 
+## Live Demo
+
+Watch the gameplay showcase here:  
+https://www.youtube.com/watch?v=OFyQtq4JjMM
+
+---
+
 ## Play It
 
 ```bash
