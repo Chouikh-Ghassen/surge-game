@@ -1,4 +1,4 @@
-# SURGE — AI-Driven Adaptive Bullet-Heaven Game
+# SURGE: AI-Driven Adaptive Bullet-Heaven Game
 
 **A bullet-heaven where the AI learns how you playn, and fights back.**
 
