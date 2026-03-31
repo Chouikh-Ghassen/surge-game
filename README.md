@@ -1,11 +1,10 @@
-# ⚡ SURGE
+# SURGE — AI-Driven Adaptive Bullet-Heaven Game
 
 **A bullet-heaven where the AI learns how you playn, and fights back.**
 
 ![Alt text](icons/SURGE_AI_HACKATHON.png)
 ---
 
-# ⚡ SURGE — AI-Driven Adaptive Bullet-Heaven Game
 
 **A real-time adaptive bullet-heaven game where AI models player behavior and dynamically adjusts gameplay difficulty and encounters.**
 
@@ -13,7 +12,7 @@ SURGE is a mobile-first survival game inspired by Vampire Survivors and Swarm (L
 
 ---
 
-## 🧠 Overview
+## Overview
 
 SURGE is not a static difficulty game. It uses a closed-loop AI system that:
 
@@ -26,7 +25,7 @@ The result is a game that continuously adjusts itself based on how the player is
 
 ---
 
-## 🤝 Collaboration
+## Collaboration
 
 This project was developed in collaboration with Ayoub Chamakhi for the Mistral AI Hackathon.
 
@@ -40,7 +39,7 @@ My main contributions include:
 
 ---
 
-## 🧠 AI Director System
+## AI Director System
 
 The AI Director is the core system that controls gameplay adaptation.
 
@@ -59,7 +58,7 @@ It works as a continuous feedback loop:
 
 ---
 
-## 🎮 Game Concept
+## Game Concept
 
 - Auto-fire bullet-heaven survival gameplay  
 - Wave-based enemy progression  
@@ -69,7 +68,7 @@ It works as a continuous feedback loop:
 
 ---
 
-## ⚙️ Architecture
+## Architecture
 
 - Custom Entity Component System (ECS)  
 - Fixed timestep game loop (60Hz)  
@@ -79,7 +78,7 @@ It works as a continuous feedback loop:
 
 ---
 
-## 🧩 Enemy Types
+## Enemy Types
 
 - Drifter: Homing movement  
 - Dasher: Charge attacks  
@@ -92,7 +91,7 @@ Each enemy can appear as Elite or Boss variants.
 
 ---
 
-## 🔧 Technology Stack
+## Technology Stack
 
 - JavaScript (ES2022)  
 - HTML5 Canvas 2D  
@@ -103,7 +102,7 @@ Each enemy can appear as Elite or Boss variants.
 
 ---
 
-## 🚀 LLM Integration
+## LLM Integration
 
 Supports multiple providers:
 
@@ -120,7 +119,7 @@ The LLM can:
 
 ---
 
-## 🎯 Key Features
+## Key Features
 
 - Real-time adaptive difficulty system  
 - Player behavior modeling (stress-based system)  
@@ -133,7 +132,7 @@ The LLM can:
 
 ---
 
-## 📊 What This Project Demonstrates
+## What This Project Demonstrates
 
 - Real-time AI system design  
 - Player behavior modeling  
@@ -144,7 +143,7 @@ The LLM can:
 
 ---
 
-## ⚡ Controls
+## Controls
 
 | Action | Input |
 |--------|------|
@@ -155,6 +154,6 @@ The LLM can:
 
 ---
 
-## ❤️ Credits
+## Credits
 
 Built by Ayoub Chamakhi and Ghassen Chouikh
